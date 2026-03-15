@@ -1,0 +1,300 @@
+@import "tailwindcss";
+
+:root {
+  --primary-color: #6366f1;
+  --primary-light: #818cf8;
+  --primary-dark: #4f46e5;
+  --glass-bg: rgba(255, 255, 255, 0.92);
+  --glass-bg-hover: rgba(255, 255, 255, 0.96);
+  --glass-border: rgba(226, 232, 240, 0.8);
+  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);
+  --glass-shadow-hover: 0 12px 40px rgba(31, 38, 135, 0.15);
+  --glass-blur: 20px;
+  --gradient-bg: linear-gradient(135deg, #e0f2fe 0%, #fce7f3 50%, #e0e7ff 100%);
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --text-primary: #000000;
+  --text-secondary: #1e293b;
+  --text-muted: #334155;
+  --bg-card: rgba(255, 255, 255, 0.92);
+  --bg-input: rgba(255, 255, 255, 0.95);
+  --wallpaper-overlay: none;
+  --nav-bg: rgba(255, 255, 255, 0.25);
+  --nav-item-bg: rgba(255, 255, 255, 0.7);
+}
+
+/* Dark theme */
+.dark {
+  --primary-color: #818cf8;
+  --primary-light: #a5b4fc;
+  --primary-dark: #6366f1;
+  --glass-bg: rgba(15, 23, 42, 0.92);
+  --glass-bg-hover: rgba(15, 23, 42, 0.96);
+  --glass-border: rgba(71, 85, 105, 0.6);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --glass-shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.4);
+  --gradient-bg: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --bg-card: rgba(15, 23, 42, 0.92);
+  --bg-input: rgba(15, 23, 42, 0.95);
+  --wallpaper-overlay: none;
+  --nav-bg: rgba(15, 23, 42, 0.25);
+  --nav-item-bg: rgba(15, 23, 42, 0.75);
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: transparent;
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  min-height: 100vh;
+}
+
+/* Decorative radial gradient overlays */
+body::before {
+  content: "";
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 70% 80%, rgba(236, 72, 153, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.05) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.dark body::before {
+  background:
+    radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 70% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.08) 0%, transparent 40%);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
+}
+
+/* Focus styles */
+input:focus, button:focus-visible {
+  outline: none;
+}
+button:focus-visible {
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+}
+
+/* Glass card utility */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--glass-shadow);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  background: var(--glass-bg-hover);
+  box-shadow: var(--glass-shadow-hover);
+  transform: translateY(-4px);
+}
+
+/* Arco overrides for glass theme */
+.arco-select-view {
+  background: var(--bg-input) !important;
+  border-color: var(--glass-border) !important;
+  backdrop-filter: blur(10px) !important;
+  border-radius: var(--radius-lg) !important;
+}
+.dark .arco-select-view {
+  color: var(--text-primary) !important;
+}
+.arco-radio-button {
+  font-weight: 500 !important;
+}
+.arco-radio-group-type-button .arco-radio-button {
+  background: rgba(255,255,255,0.85) !important;
+  border-color: rgba(226,232,240,0.8) !important;
+  border-radius: var(--radius-md) !important;
+}
+.dark .arco-radio-group-type-button .arco-radio-button {
+  background: rgba(15,23,42,0.9) !important;
+  border-color: rgba(71,85,105,0.6) !important;
+  color: var(--text-secondary) !important;
+}
+.arco-radio-group-type-button .arco-radio-button.arco-radio-checked {
+  background: rgba(99, 102, 241, 0.15) !important;
+  border-color: var(--primary-color) !important;
+  color: var(--primary-color) !important;
+}
+.arco-btn {
+  border-radius: var(--radius-lg) !important;
+}
+.arco-btn-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.35) !important;
+  border-radius: var(--radius-lg) !important;
+}
+.arco-btn-primary:hover {
+  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%) !important;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5) !important;
+  transform: translateY(-2px);
+}
+.arco-switch {
+  border-radius: 999px !important;
+}
+.arco-switch-checked {
+  background: var(--primary-color) !important;
+}
+.arco-slider-bar {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+}
+.arco-input, .arco-textarea {
+  background: var(--bg-input) !important;
+  border-color: var(--glass-border) !important;
+  border-radius: var(--radius-lg) !important;
+}
+.dark .arco-input, .dark .arco-textarea {
+  color: var(--text-primary) !important;
+}
+.arco-input:focus, .arco-input-focus, .arco-textarea:focus {
+  border-color: var(--primary-color) !important;
+}
+.arco-select-popup {
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden;
+}
+.dark .arco-select-popup,
+.dark .arco-dropdown-menu {
+  background: rgba(15, 23, 42, 0.95) !important;
+  border-color: var(--glass-border) !important;
+  border-radius: var(--radius-lg) !important;
+}
+.dark .arco-select-option,
+.dark .arco-dropdown-menu-item {
+  color: var(--text-primary) !important;
+}
+.dark .arco-select-option:hover,
+.dark .arco-dropdown-menu-item:hover {
+  background: rgba(99, 102, 241, 0.15) !important;
+}
+.arco-modal-content {
+  border-radius: var(--radius-xl) !important;
+  overflow: hidden;
+}
+.arco-radio-group-type-button {
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden;
+}
+
+/* Animation keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes titleGlow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.1); }
+}
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 768px) {
+  /* Navbar mobile hamburger handled in component */
+  .nav-desktop {
+    display: none;
+  }
+  .nav-mobile-toggle {
+    display: flex;
+  }
+
+  /* Single column cards */
+  .grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Smaller padding */
+  .max-w-6xl, .max-w-5xl, .max-w-4xl, .max-w-3xl, .max-w-2xl {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  /* Buttons min-size for touch */
+  button, .arco-btn {
+    min-height: 44px;
+  }
+
+  /* Smaller glass cards on mobile */
+  .glass-card {
+    border-radius: var(--radius-lg);
+  }
+
+  /* Reduce heading sizes */
+  h1 { font-size: 1.5rem !important; }
+
+  /* Modal fullscreen on mobile */
+  .arco-modal-content {
+    margin: 0.5rem !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+  }
+}
+
+/* Tablet (768-1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .nav-desktop {
+    display: flex;
+  }
+  .nav-mobile-toggle {
+    display: none;
+  }
+  .nav-mobile-menu {
+    display: none !important;
+  }
+
+  /* Slightly reduce padding */
+  .max-w-6xl, .max-w-5xl, .max-w-4xl {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (min-width: 1025px) {
+  .nav-desktop {
+    display: flex;
+  }
+  .nav-mobile-toggle {
+    display: none;
+  }
+  .nav-mobile-menu {
+    display: none !important;
+  }
+}
