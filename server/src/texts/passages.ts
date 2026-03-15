@@ -102,6 +102,100 @@ const passages: readonly TextPassage[] = [
     language: 'en',
   },
 
+  // Medium - Advanced (ID 16-20)
+  {
+    id: 16,
+    text: "Neuroplasticity reveals that the human brain is not a static organ but a dynamic, constantly reorganizing structure. Throughout our lives, neural pathways strengthen or weaken in response to learning, experience, and environmental stimulation, fundamentally challenging earlier assumptions about cognitive development.",
+    difficulty: 'medium',
+    language: 'en',
+  },
+  {
+    id: 17,
+    text: "Darwin's theory of evolution by natural selection posits that organisms possessing advantageous heritable traits are more likely to survive and reproduce. Over successive generations, these adaptive characteristics become prevalent within a population, driving the remarkable diversity of life on Earth.",
+    difficulty: 'medium',
+    language: 'en',
+  },
+  {
+    id: 18,
+    text: "Epistemology, the branch of philosophy concerned with the nature and scope of knowledge, grapples with fundamental questions: What constitutes justified belief? How do we distinguish genuine knowledge from mere opinion? These inquiries remain as pertinent today as they were in ancient Greece.",
+    difficulty: 'medium',
+    language: 'en',
+  },
+  {
+    id: 19,
+    text: "Game theory, a mathematical framework for analyzing strategic interactions, has profound implications for economics, political science, and evolutionary biology. The Nash equilibrium demonstrates that rational agents may reach stable outcomes even when cooperation would yield superior collective results.",
+    difficulty: 'medium',
+    language: 'en',
+  },
+  {
+    id: 20,
+    text: "Astrophysics seeks to comprehend the fundamental mechanisms governing celestial phenomena. From the thermonuclear fusion powering stellar cores to the gravitational collapse forming black holes, each discovery illuminates the extraordinary processes shaping our universe across billions of years.",
+    difficulty: 'medium',
+    language: 'en',
+  },
+
+  // Hard - Advanced (ID 21-30)
+  {
+    id: 21,
+    text: "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife. However little known the feelings or views of such a man may be on his first entering a neighbourhood, this truth is so well fixed in the minds of the surrounding families.",
+    difficulty: 'hard',
+    language: 'en',
+  },
+  {
+    id: 22,
+    text: "It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief, it was the epoch of incredulity, it was the season of Light, it was the season of Darkness, it was the spring of hope, it was the winter of despair.",
+    difficulty: 'hard',
+    language: 'en',
+  },
+  {
+    id: 23,
+    text: "To be, or not to be, that is the question: whether 'tis nobler in the mind to suffer the slings and arrows of outrageous fortune, or to take arms against a sea of troubles, and by opposing end them. To die, to sleep; no more; and by a sleep to say we end the heartache.",
+    difficulty: 'hard',
+    language: 'en',
+  },
+  {
+    id: 24,
+    text: "Quantum entanglement, a phenomenon Einstein famously derided as spooky action at a distance, describes the instantaneous correlation between spatially separated particles. This quintessential feature of quantum mechanics has profound ramifications for cryptography, teleportation protocols, and our philosophical understanding of locality.",
+    difficulty: 'hard',
+    language: 'en',
+  },
+  {
+    id: 25,
+    text: "The CRISPR-Cas9 gene editing system has revolutionized molecular biology by enabling precise, programmable modifications to genomic sequences. This unprecedented capability raises profound ethical questions about germline editing, designer organisms, and the amelioration of hereditary diseases through targeted genetic intervention.",
+    difficulty: 'hard',
+    language: 'en',
+  },
+  {
+    id: 26,
+    text: "Cognitive neuroscience endeavours to elucidate the neural substrates underlying higher-order mental processes: perception, attention, memory consolidation, and executive function. The ephemeral nature of consciousness remains the discipline's most recalcitrant puzzle, resisting reductionist explanations despite sophisticated neuroimaging methodologies.",
+    difficulty: 'hard',
+    language: 'en',
+  },
+  {
+    id: 27,
+    text: "Macroeconomic theory attempts to reconcile the paradoxical relationship between aggregate demand, monetary policy, and inflationary pressures. Keynesian economists advocate countercyclical fiscal intervention, while monetarists emphasize the pernicious consequences of excessive liquidity, rendering consensus perpetually elusive among practitioners.",
+    difficulty: 'hard',
+    language: 'en',
+  },
+  {
+    id: 28,
+    text: "The Renaissance polymath Leonardo da Vinci exemplified the quintessential fusion of artistic virtuosity and scientific inquiry. His meticulous anatomical dissections, aeronautical conceptualizations, and hydraulic engineering schemata presaged discoveries that would not materialize for centuries, transcending the intellectual boundaries of his epoch.",
+    difficulty: 'hard',
+    language: 'en',
+  },
+  {
+    id: 29,
+    text: "Existentialist philosophy, as articulated by Kierkegaard, Nietzsche, and Sartre, confronts the fundamental absurdity of human existence. In a universe devoid of inherent meaning, individuals must forge their own purpose through authentic engagement with the world, embracing radical freedom and its concomitant responsibility.",
+    difficulty: 'hard',
+    language: 'en',
+  },
+  {
+    id: 30,
+    text: "The thermodynamic arrow of time, inextricably linked to entropy's inexorable increase, distinguishes the irreversible macroscopic world from the time-symmetric equations governing microscopic phenomena. This asymmetry underpins our perception of causality, memory formation, and the cosmological trajectory from primordial order to eventual heat death.",
+    difficulty: 'hard',
+    language: 'en',
+  },
+
   // ===== CHINESE (Pinyin-based typing) =====
   // Easy
   {
@@ -208,6 +302,78 @@ const passages: readonly TextPassage[] = [
     id: 115,
     text: "tan suo yu zhou de ao mi shi ren lei yong heng de zhui qiu. cong di yi ke ren zao wei xing sheng kong, dao huo xing tan ce qi cheng gong zhuo lu, mei yi bu dou biao zhi zhe ren lei ke ji de ju da fei yue.",
     display: "探索宇宙的奥秘是人类永恒的追求。从第一颗人造卫星升空，到火星探测器成功着陆，每一步都标志着人类科技的巨大飞跃。",
+    difficulty: 'hard',
+    language: 'zh',
+  },
+
+  // ===== CHINESE CLASSICS (Pinyin-based) =====
+  {
+    id: 116,
+    text: "xian tian xia zhi you er you, hou tian xia zhi le er le. ju miao tang zhi gao ze you qi min, chu jiang hu zhi yuan ze you qi jun. shi jin yi you, tui yi you you. ran ze he shi er le ye? qi bi yue: xian tian xia zhi you er you, hou tian xia zhi le er le hu!",
+    display: "先天下之忧而忧，后天下之乐而乐。居庙堂之高则忧其民，处江湖之远则忧其君。是进亦忧，退亦忧。然则何时而乐耶？其必曰：先天下之忧而忧，后天下之乐而乐乎！",
+    difficulty: 'hard',
+    language: 'zh',
+  },
+  {
+    id: 117,
+    text: "chen liang ji bu min, jin you fu chen yi ai. xian di bu yi chen bei bi, wei zi qu qu, san gu chen yu cao lu zhi zhong, zi shi chen yi dang shi zhi shi. hou zhi qing fu, shou ren yu bai jun zhi ji, feng ming yu wei nan zhi jian.",
+    display: "臣亮既不敏，今又负丞以哀。先帝不以臣卑鄙，猥自枉屈，三顾臣于草庐之中，咨臣以当世之事。后值倾覆，受任于败军之际，奉命于危难之间。",
+    difficulty: 'hard',
+    language: 'zh',
+  },
+  {
+    id: 118,
+    text: "yu zhang gu jun, hong du xin fu. xing fen yi zhen, di jie heng lu. san jiang wu hu, kong man jing chu. wu hua tian bao, long guang she niu dou zhi xu; ren jie di ling, xu ru xia chen fan zhi ta.",
+    display: "豫章故郡，洪都新府。星分翼轸，地接衡庐。三江五湖，控蛮荆楚。物华天宝，龙光射牛斗之墟；人杰地灵，徐孺下陈蕃之榻。",
+    difficulty: 'hard',
+    language: 'zh',
+  },
+  {
+    id: 119,
+    text: "shan bu zai gao, you xian ze ming. shui bu zai shen, you long ze ling. si shi lou shi, wei wu de xin. tai hen shang jie lv, cao se ru lian qing. tan xiao you hong ru, wang lai wu bai ding. ke yi tiao su qin, yue jin jing. wu si zhu zhi luan er, wu an du zhi lao xing.",
+    display: "山不在高，有仙则名。水不在深，有龙则灵。斯是陋室，惟吾德馨。苔痕上阶绿，草色入帘青。谈笑有鸿儒，往来无白丁。可以调素琴，阅金经。无丝竹之乱耳，无案牍之劳形。",
+    difficulty: 'hard',
+    language: 'zh',
+  },
+  {
+    id: 120,
+    text: "shui lu cao mu zhi hua, ke ai zhe shen fan. jin tao yuan ming du ai ju. zi li tang lai, shi ren shen ai mu dan. yu du ai lian zhi chu yu ni er bu ran, zhuo qing lian er bu yao, zhong tong wai zhi, bu man bu zhi, xiang yuan yi qing, ting ting jing zhi.",
+    display: "水陆草木之花，可爱者甚蕃。晋陶渊明独爱菊。自李唐来，世人甚爱牡丹。予独爱莲之出淤泥而不染，濯清涟而不妖，中通外直，不蔓不枝，香远益清，亭亭净植。",
+    difficulty: 'hard',
+    language: 'zh',
+  },
+  {
+    id: 121,
+    text: "huan di zhi zui weng ye, zui weng zhi yi bu zai jiu, zai hu shan shui zhi jian ye. shan shui zhi le, de zhi xin er yu zhi jiu ye. ruo fu ri chu er lin fei kai, yun gui er yan xue ming, hui an ming bian, shan jian zhi chao mu ye.",
+    display: "环滁皆山也。醉翁之意不在酒，在乎山水之间也。山水之乐，得之心而寓之酒也。若夫日出而林霏开，云归而岩穴暝，晦明变化者，山间之朝暮也。",
+    difficulty: 'hard',
+    language: 'zh',
+  },
+  {
+    id: 122,
+    text: "jin wu ling ren bu yu wei ye, yuan xi zhong, bian de yi shan, shan you xiao kou, fang fo ruo you guang. bian she chuan, cong kou ru. chu ji xia zhai, cai tong ren. fu xing shu shi bu, huo ran kai lang. tu di ping kuang, wu she yan ran, you liang tian mei chi sang zhu zhi shu.",
+    display: "晋武陵人捕鱼为业，缘溪行，忘路之远近。忽逢桃花林，便得一山，山有小口，仿佛若有光。便舍船，从口入。初极狭，才通人。复行数十步，豁然开朗。土地平旷，屋舍俨然，有良田美池桑竹之属。",
+    difficulty: 'hard',
+    language: 'zh',
+  },
+  {
+    id: 123,
+    text: "xue er shi xi zhi, bu yi yue hu? you peng zi yuan fang lai, bu yi le hu? ren bu zhi er bu yun, bu yi jun zi hu? wen gu er zhi xin, ke yi wei shi yi. xue er bu si ze wang, si er bu xue ze dai. zhi zhi wei zhi zhi, bu zhi wei bu zhi, shi zhi ye.",
+    display: "学而时习之，不亦说乎？有朋自远方来，不亦乐乎？人不知而不愠，不亦君子乎？温故而知新，可以为师矣。学而不思则罔，思而不学则殆。知之为知之，不知为不知，是知也。",
+    difficulty: 'hard',
+    language: 'zh',
+  },
+  {
+    id: 124,
+    text: "dao ke dao, fei chang dao. ming ke ming, fei chang ming. wu ming tian di zhi shi, you ming wan wu zhi mu. gu chang wu yu, yi guan qi miao; chang you yu, yi guan qi jiao. ci liang zhe tong chu er yi ming, tong wei zhi xuan. xuan zhi you xuan, zhong miao zhi men.",
+    display: "道可道，非常道。名可名，非常名。无名天地之始，有名万物之母。故常无欲，以观其妙；常有欲，以观其徼。此两者同出而异名，同谓之玄。玄之又玄，众妙之门。",
+    difficulty: 'hard',
+    language: 'zh',
+  },
+  {
+    id: 125,
+    text: "jun bu jian huang he zhi shui tian shang lai, ben liu dao hai bu fu hui. jun bu jian gao tang ming jing bei bai fa, chao ru qing si mu cheng xue. ren sheng de yi xu jin huan, mo shi jin zun kong dui yue. tian sheng wo cai bi you yong, qian jin san jin huan fu lai.",
+    display: "君不见黄河之水天上来，奔流到海不复回。君不见高堂明镜悲白发，朝如青丝暮成雪。人生得意须尽欢，莫使金樽空对月。天生我材必有用，千金散尽还复来。",
     difficulty: 'hard',
     language: 'zh',
   },

@@ -105,11 +105,11 @@ export const CLASSIC_PASSAGES = {
     { title: 'Moby Dick', text: 'Call me Ishmael. Some years ago, never mind how long precisely, having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world.' },
   ],
   zh: [
-    { title: '论语', text: 'xue er shi xi zhi bu yi yue hu you peng zi yuan fang lai bu yi le hu ren bu zhi er bu yun bu yi jun zi hu' },
-    { title: '道德经', text: 'dao ke dao fei chang dao ming ke ming fei chang ming wu ming tian di zhi shi you ming wan wu zhi mu' },
-    { title: '三字经', text: 'ren zhi chu xing ben shan xing xiang jin xi xiang yuan gou bu jiao xing nai qian jiao zhi dao gui yi zhuan' },
-    { title: '静夜思', text: 'chuang qian ming yue guang yi shi di shang shuang ju tou wang ming yue di tou si gu xiang' },
-    { title: '滕王阁序', text: 'yu zhang gu jun hong du xin fu xing fen yi yi wang jie heng lu zhi zhi dian ya ji er san jiang liu dai jing yi' },
+    { title: '论语', text: 'xue er shi xi zhi bu yi yue hu you peng zi yuan fang lai bu yi le hu ren bu zhi er bu yun bu yi jun zi hu', display: '学而时习之不亦说乎有朋自远方来不亦乐乎人不知而不愠不亦君子乎' },
+    { title: '道德经', text: 'dao ke dao fei chang dao ming ke ming fei chang ming wu ming tian di zhi shi you ming wan wu zhi mu', display: '道可道非常道名可名非常名无名天地之始有名万物之母' },
+    { title: '三字经', text: 'ren zhi chu xing ben shan xing xiang jin xi xiang yuan gou bu jiao xing nai qian jiao zhi dao gui yi zhuan', display: '人之初性本善性相近习相远苟不教性乃迁教之道贵以专' },
+    { title: '静夜思', text: 'chuang qian ming yue guang yi shi di shang shuang ju tou wang ming yue di tou si gu xiang', display: '床前明月光疑是地上霜举头望明月低头思故乡' },
+    { title: '滕王阁序', text: 'yu zhang gu jun hong du xin fu xing fen yi yi wang jie heng lu zhi zhi dian ya ji er san jiang liu dai jing yi', display: '豫章故郡洪都新府星分翼轸地接衡庐襟三江而带五湖控蛮荆而引瓯越' },
   ],
 };
 

@@ -32,11 +32,16 @@ export function useTyping(text: string, onProgress?: (state: TypingState) => voi
   const recorderRef = useRef(new ReplayRecorder());
 
   const reset = useCallback(() => {
-    const newState = { ...INITIAL_STATE, errors: new Set<number>() };
+    // Skip leading spaces (defensive)
+    let startIndex = 0;
+    while (startIndex < text.length && text[startIndex] === ' ') {
+      startIndex++;
+    }
+    const newState = { ...INITIAL_STATE, currentIndex: startIndex, correctChars: startIndex, errors: new Set<number>() };
     stateRef.current = newState;
     setState(newState);
     recorderRef.current.reset();
-  }, []);
+  }, [text]);
 
   const getReplayData = useCallback((): readonly ReplayEvent[] => {
     return recorderRef.current.stop();
@@ -65,9 +70,16 @@ export function useTyping(text: string, onProgress?: (state: TypingState) => voi
     if (key === 'Backspace') {
       if (options?.strictMode) return; // Strict mode: no backspace allowed
       if (current.currentIndex > 0) {
-        const newIndex = current.currentIndex - 1;
+        // Skip back over spaces
+        let newIndex = current.currentIndex - 1;
+        while (newIndex > 0 && text[newIndex] === ' ') {
+          newIndex--;
+        }
         const newErrors = new Set(current.errors);
-        newErrors.delete(newIndex);
+        // Remove errors for all skipped positions
+        for (let i = newIndex; i < current.currentIndex; i++) {
+          newErrors.delete(i);
+        }
         const newState: TypingState = {
           ...current,
           currentIndex: newIndex,
@@ -99,11 +111,19 @@ export function useTyping(text: string, onProgress?: (state: TypingState) => voi
     // Record for replay
     recorderRef.current.record(key, isCorrect);
 
-    const newIndex = current.currentIndex + 1;
+    let newIndex = current.currentIndex + 1;
+    // Auto-skip spaces: spaces count as correct chars, no user input needed
+    let autoSkippedCorrect = 0;
+    while (newIndex < text.length && text[newIndex] === ' ') {
+      autoSkippedCorrect++;
+      newIndex++;
+    }
+    const newCorrectCharsWithSpaces = newCorrectChars + autoSkippedCorrect;
+
     const elapsedMinutes = (now - startTime) / 60000;
-    const newWpm = elapsedMinutes > 0 ? Math.round((newCorrectChars / 5) / elapsedMinutes) : 0;
+    const newWpm = elapsedMinutes > 0 ? Math.round((newCorrectCharsWithSpaces / 5) / elapsedMinutes) : 0;
     const newAccuracy = newTotalKeystrokes > 0
-      ? Math.round((newCorrectChars / newTotalKeystrokes) * 100)
+      ? Math.round((newCorrectCharsWithSpaces / newTotalKeystrokes) * 100)
       : 100;
     const isComplete = newIndex >= text.length;
 
@@ -113,7 +133,7 @@ export function useTyping(text: string, onProgress?: (state: TypingState) => voi
 
     const newState: TypingState = {
       currentIndex: newIndex,
-      correctChars: newCorrectChars,
+      correctChars: newCorrectCharsWithSpaces,
       totalKeystrokes: newTotalKeystrokes,
       errors: newErrors,
       startTime,

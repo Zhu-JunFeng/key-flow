@@ -232,7 +232,7 @@ function ClassicsMode({ onBack: _onBack }: { readonly onBack: () => void }) {
     );
   }
 
-  return <PracticeSession text={passages[selectedIdx].text} onBack={() => setSelectedIdx(null)} onNew={() => {
+  return <PracticeSession text={passages[selectedIdx].text} displayText={(passages[selectedIdx] as { display?: string }).display} onBack={() => setSelectedIdx(null)} onNew={() => {
     const next = (selectedIdx + 1) % passages.length;
     setSelectedIdx(next);
   }} modeName="classics" />;
@@ -258,6 +258,7 @@ function QuotesMode({ onBack }: { readonly onBack: () => void }) {
 // ============ Shared Practice Session Component ============
 function PracticeSession({
   text,
+  displayText,
   onBack,
   onNew,
   modeName: _modeName,
@@ -265,6 +266,7 @@ function PracticeSession({
   hiddenStats = false,
 }: {
   readonly text: string;
+  readonly displayText?: string;
   readonly onBack: () => void;
   readonly onNew: () => void;
   readonly modeName: string;
@@ -340,7 +342,7 @@ function PracticeSession({
         <div className="mb-6"><Stats wpm={state.wpm} accuracy={state.accuracy} progress={state.currentIndex} total={text.length} timeElapsed={timeElapsed} /></div>
       )}
 
-      <div className="mb-6"><TypingArea text={text} currentIndex={state.currentIndex} errors={state.errors} isComplete={state.isComplete} /></div>
+      <div className="mb-6"><TypingArea text={text} displayText={displayText} currentIndex={state.currentIndex} errors={state.errors} isComplete={state.isComplete} /></div>
 
       {state.isComplete ? (
         <div className="text-center space-y-5">
