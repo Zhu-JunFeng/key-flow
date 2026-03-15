@@ -52,7 +52,67 @@ export function isLoggedIn(): boolean {
   return localStorage.getItem(AUTH_KEY) !== null;
 }
 
-// Start real OAuth flow by redirecting to server
+// Google Identity Services (GIS) — 前端 credential 模式
+// 无需服务端访问 Google API，绕过国内网络限制
+const GOOGLE_CLIENT_ID = '566904688287-v4155gbbfc495ge58tapofk3fb5j9hv9.apps.googleusercontent.com';
+
+interface GoogleCredentialResponse {
+  readonly credential: string;
+}
+
+declare global {
+  interface Window {
+    readonly google?: {
+      readonly accounts: {
+        readonly id: {
+          initialize(config: {
+            readonly client_id: string;
+            readonly callback: (response: GoogleCredentialResponse) => void;
+          }): void;
+          prompt(): void;
+        };
+      };
+    };
+  }
+}
+
+function parseJwtPayload(token: string): Record<string, unknown> {
+  const base64Url = token.split('.')[1];
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  const jsonPayload = decodeURIComponent(
+    atob(base64)
+      .split('')
+      .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+      .join('')
+  );
+  return JSON.parse(jsonPayload) as Record<string, unknown>;
+}
+
+export function initGoogleLogin(onSuccess: (user: AuthUser) => void): void {
+  if (!window.google?.accounts?.id) {
+    console.error('Google Identity Services SDK not loaded');
+    return;
+  }
+  window.google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: (response: GoogleCredentialResponse) => {
+      const payload = parseJwtPayload(response.credential);
+      const user: AuthUser = {
+        id: (payload.sub as string) || getDeviceId(),
+        nickname: (payload.name as string) || 'User',
+        avatar: 0,
+        loginType: 'google',
+        email: payload.email as string | undefined,
+        avatarUrl: payload.picture as string | undefined,
+      };
+      setAuthUser(user);
+      onSuccess(user);
+    },
+  });
+  window.google.accounts.id.prompt();
+}
+
+// Legacy: redirect to server (kept for backward compat)
 export function startGoogleLogin(): void {
   const deviceId = getDeviceId();
   window.location.href = `/auth/google?device_id=${deviceId}`;

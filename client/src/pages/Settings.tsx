@@ -131,12 +131,16 @@ export default function Settings() {
     setSoundTheme(soundTheme);
     setVolume(soundVolume);
     setStoredTheme(colorTheme);
-    await syncProfile({
-      settings: { soundTheme, soundVolume, language, showKeyboard, showFingers },
-      theme: colorTheme,
-      keyboardLayout,
-      customSounds: { keySound: customKeySound ? 'custom' : '', errorSound: customErrorSound ? 'custom' : '' },
-    });
+    try {
+      await syncProfile({
+        settings: { soundTheme, soundVolume, language, showKeyboard, showFingers },
+        theme: colorTheme,
+        keyboardLayout,
+        customSounds: { keySound: customKeySound ? 'custom' : '', errorSound: customErrorSound ? 'custom' : '' },
+      });
+    } catch (err) {
+      console.warn('syncProfile failed, local settings saved:', err);
+    }
     Message.success('设置已保存');
   };
 
