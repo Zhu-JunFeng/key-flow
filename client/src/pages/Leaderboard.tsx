@@ -129,7 +129,8 @@ export default function Leaderboard() {
 }
 
 function formatTime(dateStr: string): string {
-  const date = new Date(dateStr);
+  // SQLite CURRENT_TIMESTAMP stores UTC, append 'Z' to parse correctly
+  const date = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
   const diffMins = Math.floor((Date.now() - date.getTime()) / 60000);
   if (diffMins < 1) return '刚刚';
   if (diffMins < 60) return `${diffMins}分前`;

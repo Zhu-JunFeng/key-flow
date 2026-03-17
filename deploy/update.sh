@@ -12,6 +12,7 @@ $APP_DIR/deploy/backup-db.sh
 echo "===== 2. 安装依赖 ====="
 cd "$APP_DIR"
 npm install --omit=dev
+npm install tsx
 cd "$APP_DIR/client"
 npm install
 

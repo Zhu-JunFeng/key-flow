@@ -47,6 +47,7 @@ export function setupSocketHandlers(io: Server): void {
       progress: number;
       correctChars: number;
       totalKeystrokes: number;
+      errorCount: number;
     }) => {
       const room = getRoom(data.roomId);
       if (!room) return;
@@ -56,6 +57,7 @@ export function setupSocketHandlers(io: Server): void {
         data.progress,
         data.correctChars,
         data.totalKeystrokes,
+        data.errorCount ?? 0,
         io
       );
     });

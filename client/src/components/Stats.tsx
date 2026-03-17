@@ -6,6 +6,19 @@ interface StatsProps {
   readonly timeElapsed?: number;
 }
 
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.round(ms / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes < 60) {
+    return seconds > 0 ? `${minutes}min${seconds}s` : `${minutes}min`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainMinutes = minutes % 60;
+  return remainMinutes > 0 ? `${hours}h${remainMinutes}min` : `${hours}h`;
+}
+
 export default function Stats({ wpm, accuracy, progress, total, timeElapsed }: StatsProps) {
   const progressPercent = total > 0 ? Math.round((progress / total) * 100) : 0;
 
@@ -40,7 +53,7 @@ export default function Stats({ wpm, accuracy, progress, total, timeElapsed }: S
       {timeElapsed !== undefined && (
         <StatCard
           label="用时"
-          value={`${Math.round(timeElapsed / 1000)}s`}
+          value={formatElapsed(timeElapsed)}
           color="#8b5cf6"
         />
       )}

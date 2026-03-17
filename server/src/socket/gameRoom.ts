@@ -138,6 +138,7 @@ export function updatePlayerProgress(
   progress: number,
   correctChars: number,
   totalKeystrokes: number,
+  errorCount: number,
   io: Server
 ): void {
   const player = room.players.find(p => p.id === playerId);
@@ -151,8 +152,10 @@ export function updatePlayerProgress(
   if (elapsedMinutes > 0) {
     player.wpm = Math.round((correctChars / 5) / elapsedMinutes);
   }
+  // Accuracy: correct keystrokes / total keystrokes (excluding auto-skipped spaces)
+  const correctKeystrokes = totalKeystrokes - errorCount;
   player.accuracy = totalKeystrokes > 0
-    ? Math.round((correctChars / totalKeystrokes) * 100)
+    ? Math.round((correctKeystrokes / totalKeystrokes) * 100)
     : 100;
 
   if (progress >= room.text.length) {

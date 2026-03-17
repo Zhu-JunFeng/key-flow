@@ -52,7 +52,7 @@ function ReplayList() {
                   {r.textContent.slice(0, 60)}...
                 </p>
                 <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                  {new Date(r.createdAt).toLocaleString()}
+                  {new Date(r.createdAt.endsWith('Z') ? r.createdAt : r.createdAt + 'Z').toLocaleString()}
                 </p>
               </div>
               <div className="flex gap-4 text-sm tabular-nums">

@@ -1,9 +1,9 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import Navbar from './components/Navbar';
 import ParticleEffect from './components/ParticleEffect';
-import { getWallpaperState, getMsUntilNextChange, preloadNextWallpaper, randomizeWallpaper } from './lib/wallpaper';
+import { getWallpaperState, randomizeWallpaper } from './lib/wallpaper';
 import Home from './pages/Home';
 import { handleAuthCallback } from './lib/auth';
 import { connectSocket, socket } from './lib/socket';
@@ -69,29 +69,10 @@ function AnimatedRoutes() {
 export default function App() {
   const [wallpaperUrl, setWallpaperUrl] = useState(() => getWallpaperState().url);
 
-  const refreshWallpaper = useCallback(() => {
-    const state = getWallpaperState();
-    setWallpaperUrl(state.url);
-    preloadNextWallpaper();
-  }, []);
-
   // Handle OAuth callback on app load
   useEffect(() => {
     handleAuthCallback();
   }, []);
-
-  // Wallpaper rotation - change every hour
-  useEffect(() => {
-    refreshWallpaper();
-    const msUntilNext = getMsUntilNextChange();
-    const timeout = setTimeout(() => {
-      refreshWallpaper();
-      // Then set interval for every 60 seconds after
-      const interval = setInterval(refreshWallpaper, 60 * 1000);
-      return () => clearInterval(interval);
-    }, msUntilNext);
-    return () => clearTimeout(timeout);
-  }, [refreshWallpaper]);
 
   // Listen for manual wallpaper change
   useEffect(() => {

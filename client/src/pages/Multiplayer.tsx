@@ -23,8 +23,8 @@ export default function Multiplayer() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nicknameInputRef = useRef<any>(null);
 
-  const onProgress = useCallback((s: { currentIndex: number; correctChars: number; totalKeystrokes: number }) => {
-    if (room) socket.emit('typing:progress', { roomId: room.id, progress: s.currentIndex, correctChars: s.correctChars, totalKeystrokes: s.totalKeystrokes });
+  const onProgress = useCallback((s: { currentIndex: number; correctChars: number; totalKeystrokes: number; errors: ReadonlySet<number> }) => {
+    if (room) socket.emit('typing:progress', { roomId: room.id, progress: s.currentIndex, correctChars: s.correctChars, totalKeystrokes: s.totalKeystrokes, errorCount: s.errors.size });
   }, [room]);
 
   const { state: typingState, handleKeyDown, reset } = useTyping(text, onProgress);

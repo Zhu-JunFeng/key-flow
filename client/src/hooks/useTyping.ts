@@ -122,8 +122,10 @@ export function useTyping(text: string, onProgress?: (state: TypingState) => voi
 
     const elapsedMinutes = (now - startTime) / 60000;
     const newWpm = elapsedMinutes > 0 ? Math.round((newCorrectCharsWithSpaces / 5) / elapsedMinutes) : 0;
+    // Accuracy: correct keystrokes / total keystrokes (excluding auto-skipped spaces)
+    const correctKeystrokes = newTotalKeystrokes - newErrors.size;
     const newAccuracy = newTotalKeystrokes > 0
-      ? Math.round((newCorrectCharsWithSpaces / newTotalKeystrokes) * 100)
+      ? Math.round((correctKeystrokes / newTotalKeystrokes) * 100)
       : 100;
     const isComplete = newIndex >= text.length;
 
