@@ -25,6 +25,7 @@ export default function Navbar() {
   const [locale, setLocale] = useState<Locale>(getStoredLocale);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [onlineCount, setOnlineCount] = useState(0);
+  const [userCount, setUserCount] = useState(0);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [, setAuthUser] = useState<AuthUser>(getAuthUser);
 
@@ -45,6 +46,19 @@ export default function Navbar() {
     };
     fetchCount();
     const interval = setInterval(fetchCount, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch user count periodically
+  useEffect(() => {
+    const fetchUserCount = () => {
+      fetch('/api/user-count')
+        .then(r => r.json())
+        .then(d => setUserCount(d.count ?? 0))
+        .catch(() => {});
+    };
+    fetchUserCount();
+    const interval = setInterval(fetchUserCount, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -142,6 +156,18 @@ export default function Navbar() {
             <span style={{ color: 'var(--text-muted)' }}>{t('nav.online', locale)}</span>
           </div>
 
+          {/* User count */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs" style={{
+            color: '#6366f1',
+            background: 'var(--nav-item-bg, rgba(255,255,255,0.7))',
+            border: '1px solid rgba(99,102,241,0.2)',
+          }}>
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+            </svg>
+            <span className="font-medium tabular-nums">{userCount}</span>
+          </div>
+
           {/* Language toggle */}
           <button onClick={toggleLocale}
             className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 text-xs font-bold"
@@ -197,6 +223,15 @@ export default function Navbar() {
           }}>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="font-medium tabular-nums">{onlineCount}</span>
+          </div>
+          {/* User count mobile */}
+          <div className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs" style={{
+            color: '#6366f1', background: 'rgba(99,102,241,0.08)',
+          }}>
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+            </svg>
+            <span className="font-medium tabular-nums">{userCount}</span>
           </div>
           <button onClick={toggleLocale}
             className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold"

@@ -16,6 +16,7 @@ import {
   findProfileByFriendsCode, addFriend, acceptFriend, removeFriend, getFriends, getPendingFriendRequests,
   saveReplay, getReplay, getMyReplays,
   incrementLessonPracticeCount, getAllLessonPracticeCounts,
+  getUserCount,
 } from './db/queries.js';
 import { passages, getRandomPassage } from './texts/passages.js';
 import { CODE_TEXTS, getCodeTexts } from './texts/codeTexts.js';
@@ -290,6 +291,11 @@ app.get('/api/texts/code', (req, res) => {
 app.get('/api/online-count', (_req, res) => {
   const count = getOnlineUsers().size;
   res.json({ count });
+});
+
+// ===== User Count API =====
+app.get('/api/user-count', (_req, res) => {
+  res.json({ count: getUserCount() });
 });
 
 // ===== Lesson Practice Counts API =====

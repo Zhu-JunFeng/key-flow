@@ -1,6 +1,13 @@
 import { getDb } from './schema.js';
 import type { LeaderboardEntry } from '../types.js';
 
+// ===== User Count =====
+export function getUserCount(): number {
+  const db = getDb();
+  const row = db.prepare('SELECT COUNT(*) as count FROM user_profiles').get() as { count: number };
+  return row.count;
+}
+
 // ===== Leaderboard =====
 export function addLeaderboardEntry(entry: {
   readonly deviceId?: string;
