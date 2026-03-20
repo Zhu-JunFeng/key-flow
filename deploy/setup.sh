@@ -1,8 +1,9 @@
 #!/bin/bash
 # 服务器初始化部署脚本
 # 在远程服务器上执行，用于首次部署
+# 前端产物由本地构建并上传，服务器仅安装运行时依赖并启动服务
 
-set -e
+set -euo pipefail
 
 APP_DIR="/opt/typing-race"
 
@@ -40,10 +41,14 @@ mkdir -p "$APP_DIR/backups"
 
 echo "===== 5. 安装依赖 ====="
 cd "$APP_DIR"
-npm install --omit=dev
-cd "$APP_DIR/client"
-npm install
-npm run build
+npm install --omit=dev --no-fund --no-audit
+npm install --no-save tsx --no-fund --no-audit
+
+if [ ! -f "$APP_DIR/client/dist/index.html" ]; then
+    echo "ERROR: missing $APP_DIR/client/dist/index.html"
+    echo "Please build locally and upload client/dist before running deploy/setup.sh"
+    exit 1
+fi
 
 echo "===== 6. 配置 Nginx ====="
 cp "$APP_DIR/deploy/nginx.conf" /etc/nginx/conf.d/typing-race.conf

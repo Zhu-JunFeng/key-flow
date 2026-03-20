@@ -33,13 +33,23 @@ const isProduction = process.env.NODE_ENV === 'production';
 const normalizeOrigin = (value: string) => value.replace(/\/+$/, '');
 const renderExternalUrl = process.env.RENDER_EXTERNAL_URL?.trim();
 const renderOrigin = renderExternalUrl ? normalizeOrigin(renderExternalUrl) : '';
+const defaultProductionOrigins = [
+  'http://182.92.160.46',
+  'https://182.92.160.46',
+  'http://182-92-160-46.nip.io',
+  'https://182-92-160-46.nip.io',
+];
 const configuredOrigins = (process.env.APP_ORIGIN ?? renderOrigin)
   .split(',')
   .map(origin => normalizeOrigin(origin.trim()))
   .filter(Boolean);
-const allowedOrigins = configuredOrigins.length > 0
-  ? configuredOrigins
-  : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'];
+const allowedOrigins = Array.from(new Set([
+  ...configuredOrigins,
+  ...defaultProductionOrigins,
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:3000',
+]));
 
 const corsOptions: CorsOptions = {
   origin(origin, callback) {

@@ -11,6 +11,8 @@ export default function Settings() {
   const locale = useLocale();
   const [soundTheme, setSoundThemeState] = useState<SoundTheme>(getTheme());
   const [soundVolume, setSoundVolume] = useState(getVolume());
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
   const [language, setLanguage] = useState<'en' | 'zh'>(() => (localStorage.getItem('typingLanguage') as 'en' | 'zh') || 'en');
   const [showKeyboard, setShowKeyboard] = useState(() => localStorage.getItem('showKeyboard') !== 'false');
   const [showFingers, setShowFingers] = useState(() => localStorage.getItem('showFingers') !== 'false');
@@ -121,6 +123,10 @@ export default function Settings() {
   };
 
   const handleSave = async () => {
+    if (isSaving) return;
+
+    setIsSaving(true);
+    setSaveFeedback(locale === 'zh' ? '正在保存设置...' : 'Saving settings...');
     localStorage.setItem('typingLanguage', language);
     localStorage.setItem('showKeyboard', String(showKeyboard));
     localStorage.setItem('showFingers', String(showFingers));
@@ -141,10 +147,15 @@ export default function Settings() {
         keyboardLayout,
         customSounds: { keySound: customKeySound ? 'custom' : '', errorSound: customErrorSound ? 'custom' : '' },
       });
+      setSaveFeedback(locale === 'zh' ? '设置已保存到本地和服务器' : 'Settings saved locally and synced');
+      Message.success(locale === 'zh' ? '保存成功' : 'Saved successfully');
     } catch (err) {
       console.warn('syncProfile failed, local settings saved:', err);
+      setSaveFeedback(locale === 'zh' ? '本地设置已保存，服务器同步失败' : 'Settings saved locally, but server sync failed');
+      Message.warning(locale === 'zh' ? '本地设置已保存，服务器同步失败' : 'Saved locally, but server sync failed');
+    } finally {
+      setIsSaving(false);
     }
-    Message.success(locale === 'zh' ? '设置已保存' : 'Settings saved');
   };
 
   return (
@@ -321,9 +332,16 @@ export default function Settings() {
           </div>
         </Section>
 
-        <Button type="primary" long size="large" onClick={handleSave} style={{ height: '48px', fontSize: '16px', fontWeight: 700 }}>
-          {locale === 'zh' ? '保存设置' : 'Save Settings'}
-        </Button>
+        <div className="space-y-2">
+          <Button type="primary" long size="large" onClick={handleSave} loading={isSaving} style={{ height: '48px', fontSize: '16px', fontWeight: 700 }}>
+            {isSaving ? (locale === 'zh' ? '保存中...' : 'Saving...') : (locale === 'zh' ? '保存设置' : 'Save Settings')}
+          </Button>
+          {saveFeedback && (
+            <p className="text-sm text-center" style={{ color: 'var(--text-secondary)' }}>
+              {saveFeedback}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
