@@ -1,3 +1,5 @@
+import { getStoredAvatar, getStoredNickname } from './userPrefs';
+
 export interface LessonProgress {
   readonly lessonId: number;
   readonly stars: number;         // 0-5
@@ -33,8 +35,8 @@ const STORAGE_KEY = 'typerace_progress';
 
 function getDefaultProgress(): UserProgress {
   return {
-    nickname: localStorage.getItem('nickname') || '',
-    avatar: parseInt(localStorage.getItem('avatar') || '0'),
+    nickname: getStoredNickname(),
+    avatar: getStoredAvatar(),
     lessons: {},
     totalTyped: 0,
     totalTime: 0,
@@ -80,8 +82,8 @@ export function updateLessonProgress(
 
   const updated: UserProgress = {
     ...progress,
-    nickname: localStorage.getItem('nickname') || progress.nickname,
-    avatar: parseInt(localStorage.getItem('avatar') || '0'),
+    nickname: getStoredNickname(progress.nickname),
+    avatar: getStoredAvatar(progress.avatar),
     lessons: {
       ...progress.lessons,
       [lessonId]: {

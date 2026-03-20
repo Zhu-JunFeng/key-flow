@@ -8,6 +8,7 @@ const rooms = new Map<string, MutableGameRoom>();
 
 interface MutableRoomPlayer {
   id: string;
+  deviceId: string | null;
   nickname: string;
   avatar: number;
   progress: number;
@@ -28,6 +29,8 @@ interface MutableGameRoom {
   startTime: number | null;
   countdownEnd: number | null;
   maxPlayers: number;
+  difficulty: 'easy' | 'medium' | 'hard';
+  language: 'en' | 'zh';
   countdownTimer: ReturnType<typeof setTimeout> | null;
   finishTimer: ReturnType<typeof setTimeout> | null;
 }
@@ -51,11 +54,17 @@ function toImmutableRoom(room: MutableGameRoom): GameRoom {
     startTime: room.startTime,
     countdownEnd: room.countdownEnd,
     maxPlayers: room.maxPlayers,
+    difficulty: room.difficulty,
+    language: room.language,
   };
 }
 
-export function createRoom(maxPlayers = 5): MutableGameRoom {
-  const passage = getRandomPassage('medium');
+export function createRoom(
+  maxPlayers = 5,
+  difficulty: 'easy' | 'medium' | 'hard' = 'medium',
+  language: 'en' | 'zh' = 'en'
+): MutableGameRoom {
+  const passage = getRandomPassage(difficulty, language);
   const room: MutableGameRoom = {
     id: uuidv4().slice(0, 8),
     text: passage.text,
@@ -64,6 +73,8 @@ export function createRoom(maxPlayers = 5): MutableGameRoom {
     startTime: null,
     countdownEnd: null,
     maxPlayers,
+    difficulty,
+    language,
     countdownTimer: null,
     finishTimer: null,
   };
@@ -78,11 +89,13 @@ export function getRoom(roomId: string): MutableGameRoom | undefined {
 export function addPlayerToRoom(
   room: MutableGameRoom,
   playerId: string,
+  deviceId: string | null,
   nickname: string,
   avatar: number
 ): MutableRoomPlayer {
   const player: MutableRoomPlayer = {
     id: playerId,
+    deviceId,
     nickname,
     avatar,
     progress: 0,
@@ -192,6 +205,7 @@ function finishRoom(room: MutableGameRoom, io: Server): void {
   // Save to database
   for (const p of room.players) {
     addLeaderboardEntry({
+      deviceId: p.deviceId ?? undefined,
       nickname: p.nickname,
       avatar: p.avatar,
       wpm: p.wpm,
@@ -201,6 +215,7 @@ function finishRoom(room: MutableGameRoom, io: Server): void {
     });
     addMatchHistory({
       roomId: room.id,
+      deviceId: p.deviceId ?? undefined,
       nickname: p.nickname,
       avatar: p.avatar,
       wpm: p.wpm,

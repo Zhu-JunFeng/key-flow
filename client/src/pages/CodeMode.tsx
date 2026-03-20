@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button, Spin, Radio } from '@arco-design/web-react';
 import Stats from '../components/Stats';
 import VirtualKeyboard from '../components/VirtualKeyboard';
+import { useElapsedTime } from '../hooks/useElapsedTime';
 import { useTyping } from '../hooks/useTyping';
 import { resumeAudioContext } from '../lib/sounds';
 import { fetchCodeTexts } from '../lib/api';
 import { reportSession } from '../lib/api';
 import { submitScore } from '../lib/device';
 import { tokenizeCode, TOKEN_COLORS } from '../lib/codeTexts';
+import { getStoredAvatar, getStoredNickname } from '../lib/userPrefs';
 
 interface CodeText {
   readonly id: string;
@@ -25,26 +27,35 @@ export default function CodeMode() {
   const [showKeyboard] = useState(() => localStorage.getItem('showKeyboard') !== 'false');
   const [lastPressedKey, setLastPressedKey] = useState<string | undefined>();
   const [lastWasError, setLastWasError] = useState(false);
-  const nickname = localStorage.getItem('nickname') ?? '';
+  const nickname = getStoredNickname();
 
-  const loadTexts = useCallback(async (lang: string) => {
-    setLoading(true);
-    const texts = await fetchCodeTexts(lang);
-    setCodeTexts(texts);
-    if (texts.length > 0) {
-      setCurrentText(texts[Math.floor(Math.random() * texts.length)]);
-    }
-    setLoading(false);
-  }, []);
+  useEffect(() => {
+    let cancelled = false;
 
-  useEffect(() => { loadTexts(language); }, [language, loadTexts]);
+    void (async () => {
+      const texts = await fetchCodeTexts(language);
+      if (cancelled) return;
+
+      setCodeTexts(texts);
+      if (texts.length > 0) {
+        setCurrentText(texts[Math.floor(Math.random() * texts.length)]);
+      } else {
+        setCurrentText(null);
+      }
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [language]);
 
   const onProgress = useCallback((s: { isComplete: boolean; wpm: number; accuracy: number; startTime: number | null; endTime: number | null }) => {
     if (s.isComplete && currentText && nickname) {
       const timeMs = s.startTime && s.endTime ? s.endTime - s.startTime : 0;
       submitScore({
         nickname,
-        avatar: parseInt(localStorage.getItem('avatar') ?? '0'),
+        avatar: getStoredAvatar(),
         wpm: s.wpm,
         accuracy: s.accuracy,
         textLength: currentText.text.length,
@@ -81,7 +92,7 @@ export default function CodeMode() {
     }
   };
 
-  const timeElapsed = state.startTime ? (state.endTime ?? Date.now()) - state.startTime : undefined;
+  const timeElapsed = useElapsedTime(state.startTime, state.endTime);
   const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
   const colorScheme = isDark ? TOKEN_COLORS.dark : TOKEN_COLORS.light;
 
@@ -116,7 +127,7 @@ export default function CodeMode() {
         onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
         onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
         <div className="flex items-center gap-3">
-          <Radio.Group type="button" value={language} onChange={v => { setLanguage(v); reset(); }}
+              <Radio.Group type="button" value={language} onChange={v => { setLoading(true); setLanguage(v); reset(); }}
             options={[
               { label: 'JavaScript', value: 'javascript' },
               { label: 'Python', value: 'python' },

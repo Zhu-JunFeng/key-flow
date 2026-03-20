@@ -1,6 +1,83 @@
 import { getDb } from './schema.js';
 import type { LeaderboardEntry } from '../types.js';
 
+interface DailyStatRow {
+  readonly date: string;
+  readonly chars: number;
+  readonly wpm: number;
+  readonly accuracy: number;
+  readonly sessions: number;
+  readonly timeMs: number;
+}
+
+interface KeyStatRow {
+  readonly keyChar: string;
+  readonly correct: number;
+  readonly incorrect: number;
+}
+
+interface CustomTextEntry {
+  readonly id: number;
+  readonly title: string;
+  readonly content: string;
+  readonly language: string;
+  readonly collectionName: string;
+  readonly tags: readonly string[];
+  readonly isFavorite: boolean;
+  readonly useCount: number;
+  readonly lastUsedAt: string | null;
+  readonly createdAt: string;
+}
+
+interface CustomTextRow {
+  readonly id: number;
+  readonly title: string;
+  readonly content: string;
+  readonly language: string;
+  readonly collectionName: string;
+  readonly tags: string;
+  readonly isFavorite: number;
+  readonly useCount: number;
+  readonly lastUsedAt: string | null;
+  readonly createdAt: string;
+}
+
+function safeJsonParse<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function average(values: readonly number[]): number {
+  return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+}
+
+function stdDev(values: readonly number[]): number {
+  if (values.length <= 1) return 0;
+  const avg = average(values);
+  const variance = average(values.map(value => (value - avg) ** 2));
+  return Math.sqrt(variance);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function toIsoDate(date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function customTextRowToEntry(row: CustomTextRow): CustomTextEntry {
+  return {
+    ...row,
+    tags: safeJsonParse<readonly string[]>(row.tags, []),
+    isFavorite: Boolean(row.isFavorite),
+  };
+}
+
 // ===== User Count =====
 export function getUserCount(): number {
   const db = getDb();
@@ -145,6 +222,10 @@ export function getOrCreateProfile(deviceId: string): UserProfile {
       INSERT INTO user_profiles (device_id, nickname, avatar, friends_code) VALUES (?, ?, ?, ?)
     `).run(deviceId, 'Player_' + deviceId.slice(0, 6), 0, friendsCode);
     row = db.prepare('SELECT * FROM user_profiles WHERE device_id = ?').get(deviceId) as UserProfileRow;
+  } else if (!row.friends_code) {
+    const friendsCode = generateFriendsCode();
+    db.prepare('UPDATE user_profiles SET friends_code = ? WHERE device_id = ?').run(friendsCode, deviceId);
+    row = { ...row, friends_code: friendsCode };
   }
 
   return rowToProfile(row!);
@@ -336,11 +417,23 @@ export function createCustomText(deviceId: string, data: {
   readonly title: string;
   readonly content: string;
   readonly language?: string;
+  readonly collectionName?: string;
+  readonly tags?: readonly string[];
+  readonly isFavorite?: boolean;
 }): number {
   const db = getDb();
   const result = db.prepare(`
-    INSERT INTO custom_texts (device_id, title, content, language) VALUES (?, ?, ?, ?)
-  `).run(deviceId, data.title, data.content, data.language ?? 'en');
+    INSERT INTO custom_texts (device_id, title, content, language, collection_name, tags, is_favorite)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    deviceId,
+    data.title,
+    data.content,
+    data.language ?? 'en',
+    data.collectionName?.trim() || 'My Library',
+    JSON.stringify(data.tags ?? []),
+    data.isFavorite ? 1 : 0
+  );
   return Number(result.lastInsertRowid);
 }
 
@@ -349,18 +442,73 @@ export function getCustomTexts(deviceId: string): readonly {
   readonly title: string;
   readonly content: string;
   readonly language: string;
+  readonly collectionName: string;
+  readonly tags: readonly string[];
+  readonly isFavorite: boolean;
+  readonly useCount: number;
+  readonly lastUsedAt: string | null;
   readonly createdAt: string;
 }[] {
   const db = getDb();
-  return db.prepare(`
-    SELECT id, title, content, language, created_at as createdAt
-    FROM custom_texts WHERE device_id = ? ORDER BY created_at DESC
-  `).all(deviceId) as { id: number; title: string; content: string; language: string; createdAt: string }[];
+  const rows = db.prepare(`
+    SELECT id, title, content, language, collection_name as collectionName, tags,
+           is_favorite as isFavorite, use_count as useCount, last_used_at as lastUsedAt,
+           created_at as createdAt
+    FROM custom_texts
+    WHERE device_id = ?
+    ORDER BY is_favorite DESC, COALESCE(last_used_at, created_at) DESC, created_at DESC
+  `).all(deviceId) as CustomTextRow[];
+  return rows.map(customTextRowToEntry);
 }
 
 export function deleteCustomText(deviceId: string, textId: number): boolean {
   const db = getDb();
   const result = db.prepare('DELETE FROM custom_texts WHERE id = ? AND device_id = ?').run(textId, deviceId);
+  return result.changes > 0;
+}
+
+export function updateCustomText(deviceId: string, textId: number, updates: {
+  readonly title?: string;
+  readonly content?: string;
+  readonly language?: string;
+  readonly collectionName?: string;
+  readonly tags?: readonly string[];
+  readonly isFavorite?: boolean;
+}): boolean {
+  const db = getDb();
+  const current = db.prepare(`
+    SELECT id, title, content, language, collection_name as collectionName, tags,
+           is_favorite as isFavorite, use_count as useCount, last_used_at as lastUsedAt,
+           created_at as createdAt
+    FROM custom_texts
+    WHERE id = ? AND device_id = ?
+  `).get(textId, deviceId) as CustomTextRow | undefined;
+  if (!current) return false;
+
+  const result = db.prepare(`
+    UPDATE custom_texts
+    SET title = ?, content = ?, language = ?, collection_name = ?, tags = ?, is_favorite = ?
+    WHERE id = ? AND device_id = ?
+  `).run(
+    updates.title?.trim() || current.title,
+    updates.content ?? current.content,
+    updates.language ?? current.language,
+    updates.collectionName?.trim() || current.collectionName,
+    JSON.stringify(updates.tags ?? safeJsonParse<readonly string[]>(current.tags, [])),
+    updates.isFavorite == null ? current.isFavorite : (updates.isFavorite ? 1 : 0),
+    textId,
+    deviceId
+  );
+  return result.changes > 0;
+}
+
+export function markCustomTextUsed(deviceId: string, textId: number): boolean {
+  const db = getDb();
+  const result = db.prepare(`
+    UPDATE custom_texts
+    SET use_count = use_count + 1, last_used_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND device_id = ?
+  `).run(textId, deviceId);
   return result.changes > 0;
 }
 
@@ -536,6 +684,41 @@ export function getPendingFriendRequests(deviceId: string): readonly {
   `).all(deviceId) as { deviceId: string; nickname: string; avatar: number }[];
 }
 
+// ===== Game Scores =====
+export function submitGameScore(data: {
+  readonly deviceId: string;
+  readonly nickname: string;
+  readonly avatar: number;
+  readonly gameId: string;
+  readonly score: number;
+  readonly difficulty: string;
+}): number {
+  const db = getDb();
+  const result = db.prepare(`
+    INSERT INTO game_scores (device_id, nickname, avatar, game_id, score, difficulty)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(data.deviceId, data.nickname, data.avatar, data.gameId, data.score, data.difficulty);
+  return result.lastInsertRowid as number;
+}
+
+export function getGameLeaderboard(gameId: string, limit = 20): readonly {
+  readonly nickname: string;
+  readonly avatar: number;
+  readonly score: number;
+  readonly difficulty: string;
+  readonly deviceId: string;
+  readonly createdAt: string;
+}[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT nickname, avatar, score, difficulty, device_id as deviceId, created_at as createdAt
+    FROM game_scores
+    WHERE game_id = ?
+    ORDER BY score DESC
+    LIMIT ?
+  `).all(gameId, limit) as { nickname: string; avatar: number; score: number; difficulty: string; deviceId: string; createdAt: string }[];
+}
+
 // ===== Typing Replays =====
 export function saveReplay(data: {
   readonly deviceId: string;
@@ -609,4 +792,568 @@ export function getAllLessonPracticeCounts(): Record<number, number> {
     result[row.lesson_id] = row.practice_count;
   }
   return result;
+}
+
+function getModeBreakdown(deviceId: string): readonly {
+  readonly mode: string;
+  readonly sessions: number;
+  readonly avgWpm: number;
+  readonly avgAccuracy: number;
+}[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT mode, COUNT(*) as sessions, ROUND(AVG(wpm), 1) as avgWpm, ROUND(AVG(accuracy), 1) as avgAccuracy
+    FROM leaderboard
+    WHERE device_id = ? AND created_at >= datetime('now', '-30 days')
+    GROUP BY mode
+    ORDER BY sessions DESC
+  `).all(deviceId) as {
+    mode: string;
+    sessions: number;
+    avgWpm: number;
+    avgAccuracy: number;
+  }[];
+}
+
+function getBestHour(deviceId: string): { readonly hour: number; readonly avgWpm: number } | null {
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT CAST(strftime('%H', created_at) AS INTEGER) as hour, ROUND(AVG(wpm), 1) as avgWpm
+    FROM leaderboard
+    WHERE device_id = ?
+    GROUP BY hour
+    HAVING COUNT(*) >= 2
+    ORDER BY avgWpm DESC
+    LIMIT 1
+  `).get(deviceId) as { hour: number; avgWpm: number } | undefined;
+  return row ?? null;
+}
+
+function getSeasonRows(): {
+  readonly deviceId: string;
+  readonly nickname: string;
+  readonly avatar: number;
+  readonly matches: number;
+  readonly wins: number;
+  readonly podiums: number;
+  readonly avgWpm: number;
+  readonly avgAccuracy: number;
+  readonly rating: number;
+}[] {
+  const db = getDb();
+  return db.prepare(`
+    SELECT
+      device_id as deviceId,
+      MAX(nickname) as nickname,
+      MAX(avatar) as avatar,
+      COUNT(*) as matches,
+      SUM(CASE WHEN rank = 1 THEN 1 ELSE 0 END) as wins,
+      SUM(CASE WHEN rank <= 3 THEN 1 ELSE 0 END) as podiums,
+      ROUND(AVG(wpm), 1) as avgWpm,
+      ROUND(AVG(accuracy), 1) as avgAccuracy,
+      CAST(
+        SUM(
+          CASE
+            WHEN rank = 1 THEN 28
+            WHEN rank = 2 THEN 20
+            WHEN rank = 3 THEN 15
+            ELSE MAX(8 - rank, 1)
+          END
+        ) + AVG(wpm) + AVG(accuracy) / 4 AS INTEGER
+      ) as rating
+    FROM match_history
+    WHERE device_id IS NOT NULL AND created_at >= datetime('now', '-30 days')
+    GROUP BY device_id
+    ORDER BY rating DESC, avgWpm DESC
+  `).all() as {
+    deviceId: string;
+    nickname: string;
+    avatar: number;
+    matches: number;
+    wins: number;
+    podiums: number;
+    avgWpm: number;
+    avgAccuracy: number;
+    rating: number;
+  }[];
+}
+
+function getTierFromRating(rating: number): 'Bronze' | 'Silver' | 'Gold' | 'Platinum' | 'Diamond' {
+  if (rating >= 540) return 'Diamond';
+  if (rating >= 380) return 'Platinum';
+  if (rating >= 250) return 'Gold';
+  if (rating >= 140) return 'Silver';
+  return 'Bronze';
+}
+
+export function getAdaptiveRecommendations(deviceId: string): {
+  readonly priority: 'accuracy' | 'speed' | 'stamina' | 'competition';
+  readonly suggestedDifficulty: 'easy' | 'medium' | 'hard';
+  readonly recommendedMode: 'practice' | 'lessons' | 'code' | 'multiplayer' | 'daily';
+  readonly focusKeys: readonly string[];
+  readonly targetWpm: number;
+  readonly targetAccuracy: number;
+  readonly targetSessions: number;
+  readonly drills: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly description: string;
+    readonly path: string;
+  }[];
+} {
+  const daily = getDailyStats(deviceId, 14);
+  const keys = getKeyErrorStats(deviceId);
+  const history = getPlayerHistory(deviceId, 20);
+  const stats = getPlayerStats(deviceId);
+  const recentAccuracy = average(history.slice(0, 8).map(entry => entry.accuracy));
+  const recentWpm = average(history.slice(0, 8).map(entry => entry.wpm));
+  const weeklySessions = daily.slice(-7).reduce((sum, item) => sum + item.sessions, 0);
+  const weakKeys = keys
+    .filter(key => key.correct + key.incorrect >= 5)
+    .sort((a, b) => (b.incorrect / Math.max(b.correct + b.incorrect, 1)) - (a.incorrect / Math.max(a.correct + a.incorrect, 1)))
+    .slice(0, 4)
+    .map(key => key.keyChar);
+
+  const suggestedDifficulty = recentWpm >= 65 && recentAccuracy >= 95
+    ? 'hard'
+    : recentWpm >= 35 && recentAccuracy >= 90
+      ? 'medium'
+      : 'easy';
+
+  let priority: 'accuracy' | 'speed' | 'stamina' | 'competition' = 'speed';
+  if (recentAccuracy > 0 && recentAccuracy < 92) priority = 'accuracy';
+  else if (weeklySessions < 4) priority = 'stamina';
+  else if (stats.wins < 5 && recentWpm >= 35) priority = 'competition';
+
+  const recommendedMode = priority === 'accuracy'
+    ? 'lessons'
+    : priority === 'competition'
+      ? 'multiplayer'
+      : weakKeys.some(key => /[{}\[\]();,./]/.test(key))
+        ? 'code'
+        : weeklySessions >= 5
+          ? 'daily'
+          : 'practice';
+
+  const targetWpm = Math.max(20, Math.round((recentWpm || stats.bestWpm || 20) + (priority === 'speed' ? 8 : 4)));
+  const targetAccuracy = Math.min(99, Math.round(Math.max(recentAccuracy || stats.avgAccuracy || 88, 88) + (priority === 'accuracy' ? 4 : 2)));
+  const targetSessions = Math.max(3, weeklySessions < 4 ? 6 : 4);
+
+  const drills = [
+    {
+      id: 'warmup',
+      title: priority === 'accuracy' ? 'Precision Warmup' : 'Speed Builder',
+      description: priority === 'accuracy'
+        ? `Run 3 short sessions and keep accuracy above ${targetAccuracy}%.`
+        : `Push two short bursts above ${targetWpm} WPM before switching mode.`,
+      path: '/practice',
+    },
+    {
+      id: 'focus',
+      title: weakKeys.length > 0 ? `Focus Keys: ${weakKeys.join(' ')}` : 'Technique Refresh',
+      description: weakKeys.length > 0
+        ? 'Use lessons or custom text drills that repeat your weakest keys.'
+        : 'Review a lesson set and stabilize finger travel before adding speed.',
+      path: '/lessons',
+    },
+    {
+      id: 'pressure',
+      title: priority === 'competition' ? 'Queue Into Ranked Pressure' : 'Daily Pressure Test',
+      description: priority === 'competition'
+        ? 'Play one multiplayer race and compare your opening pace with your practice speed.'
+        : 'Use a single high-focus challenge to lock in today’s form.',
+      path: priority === 'competition' ? '/multiplayer' : '/daily',
+    },
+  ] as const;
+
+  return {
+    priority,
+    suggestedDifficulty,
+    recommendedMode,
+    focusKeys: weakKeys,
+    targetWpm,
+    targetAccuracy,
+    targetSessions,
+    drills,
+  };
+}
+
+export function getDashboardInsights(deviceId: string): {
+  readonly consistencyScore: number;
+  readonly weeklySessions: number;
+  readonly weeklyChars: number;
+  readonly weeklyMinutes: number;
+  readonly wpmTrend: number;
+  readonly accuracyTrend: number;
+  readonly bestHour: { readonly hour: number; readonly avgWpm: number } | null;
+  readonly modeBreakdown: readonly {
+    readonly mode: string;
+    readonly sessions: number;
+    readonly avgWpm: number;
+    readonly avgAccuracy: number;
+  }[];
+  readonly coach: ReturnType<typeof getAdaptiveRecommendations>;
+} {
+  const daily = getDailyStats(deviceId, 14);
+  const recentWindow = daily.slice(-7);
+  const previousWindow = daily.slice(-14, -7);
+  const recentWpms = recentWindow.map(item => item.wpm).filter(Boolean);
+  const recentAccuracies = recentWindow.map(item => item.accuracy).filter(Boolean);
+  const modeBreakdown = getModeBreakdown(deviceId);
+  const weeklySessions = recentWindow.reduce((sum, item) => sum + item.sessions, 0);
+  const weeklyChars = recentWindow.reduce((sum, item) => sum + item.chars, 0);
+  const weeklyMinutes = Math.round(recentWindow.reduce((sum, item) => sum + item.timeMs, 0) / 60000);
+  const wpmTrend = Number((average(recentWindow.map(item => item.wpm)) - average(previousWindow.map(item => item.wpm))).toFixed(1));
+  const accuracyTrend = Number((average(recentWindow.map(item => item.accuracy)) - average(previousWindow.map(item => item.accuracy))).toFixed(1));
+  const consistencyScore = Math.round(clamp(100 - stdDev(recentWpms) * 2.2 - Math.max(0, 94 - average(recentAccuracies)), 42, 99));
+
+  return {
+    consistencyScore,
+    weeklySessions,
+    weeklyChars,
+    weeklyMinutes,
+    wpmTrend,
+    accuracyTrend,
+    bestHour: getBestHour(deviceId),
+    modeBreakdown,
+    coach: getAdaptiveRecommendations(deviceId),
+  };
+}
+
+export function getSeasonOverview(deviceId: string): {
+  readonly player: {
+    readonly rank: number | null;
+    readonly rating: number;
+    readonly tier: string;
+    readonly matches: number;
+    readonly wins: number;
+    readonly podiums: number;
+    readonly avgWpm: number;
+    readonly avgAccuracy: number;
+    readonly winRate: number;
+  };
+  readonly leaderboard: readonly {
+    readonly rank: number;
+    readonly deviceId: string;
+    readonly nickname: string;
+    readonly avatar: number;
+    readonly rating: number;
+    readonly wins: number;
+    readonly avgWpm: number;
+    readonly tier: string;
+  }[];
+  readonly recentOpponents: readonly {
+    readonly deviceId: string;
+    readonly nickname: string;
+    readonly avatar: number;
+    readonly races: number;
+    readonly lastSeen: string;
+  }[];
+  readonly friendLadder: readonly {
+    readonly deviceId: string;
+    readonly nickname: string;
+    readonly avatar: number;
+    readonly rating: number;
+    readonly tier: string;
+  }[];
+} {
+  const db = getDb();
+  const seasonRows = getSeasonRows();
+  const playerIndex = seasonRows.findIndex(row => row.deviceId === deviceId);
+  const playerRow = playerIndex >= 0
+    ? seasonRows[playerIndex]
+    : { deviceId, nickname: 'You', avatar: 0, matches: 0, wins: 0, podiums: 0, avgWpm: 0, avgAccuracy: 0, rating: 0 };
+
+  const leaderboard = seasonRows.slice(0, 10).map((row, index) => ({
+    rank: index + 1,
+    deviceId: row.deviceId,
+    nickname: row.nickname,
+    avatar: row.avatar,
+    rating: row.rating,
+    wins: row.wins,
+    avgWpm: row.avgWpm,
+    tier: getTierFromRating(row.rating),
+  }));
+
+  const recentOpponents = db.prepare(`
+    SELECT other.device_id as deviceId, MAX(other.nickname) as nickname, MAX(other.avatar) as avatar,
+           COUNT(*) as races, MAX(other.created_at) as lastSeen
+    FROM match_history self
+    JOIN match_history other
+      ON self.room_id = other.room_id
+     AND other.device_id IS NOT NULL
+     AND other.device_id != self.device_id
+    WHERE self.device_id = ? AND self.created_at >= datetime('now', '-30 days')
+    GROUP BY other.device_id
+    ORDER BY lastSeen DESC
+    LIMIT 5
+  `).all(deviceId) as {
+    deviceId: string;
+    nickname: string;
+    avatar: number;
+    races: number;
+    lastSeen: string;
+  }[];
+
+  const friendIds = new Set(getFriends(deviceId).map(friend => friend.deviceId));
+  const friendLadder = seasonRows
+    .filter(row => friendIds.has(row.deviceId))
+    .slice(0, 5)
+    .map(row => ({
+      deviceId: row.deviceId,
+      nickname: row.nickname,
+      avatar: row.avatar,
+      rating: row.rating,
+      tier: getTierFromRating(row.rating),
+    }));
+
+  return {
+    player: {
+      rank: playerIndex >= 0 ? playerIndex + 1 : null,
+      rating: playerRow.rating,
+      tier: getTierFromRating(playerRow.rating),
+      matches: playerRow.matches,
+      wins: playerRow.wins,
+      podiums: playerRow.podiums,
+      avgWpm: playerRow.avgWpm,
+      avgAccuracy: playerRow.avgAccuracy,
+      winRate: playerRow.matches > 0 ? Math.round((playerRow.wins / playerRow.matches) * 100) : 0,
+    },
+    leaderboard,
+    recentOpponents,
+    friendLadder,
+  };
+}
+
+export function getReplayAnalysis(replayId: number): {
+  readonly totalErrors: number;
+  readonly correctionBursts: number;
+  readonly longestPerfectStreak: number;
+  readonly averageIntervalMs: number;
+  readonly consistencyScore: number;
+  readonly hardestSnippet: string;
+  readonly mistakeHotspots: readonly { readonly char: string; readonly errors: number }[];
+  readonly benchmark: {
+    readonly replayId: number;
+    readonly wpm: number;
+    readonly accuracy: number;
+    readonly deltaWpm: number;
+    readonly deltaAccuracy: number;
+  } | null;
+} | null {
+  const db = getDb();
+  const replay = getReplay(replayId);
+  if (!replay) return null;
+
+  let cursor = 0;
+  let currentPerfectStreak = 0;
+  let longestPerfectStreak = 0;
+  let correctionBursts = 0;
+  let inBurst = false;
+  const errorPositions: number[] = [];
+  const mistakeCounts = new Map<string, number>();
+  const keyTimestamps = replay.replayData
+    .filter(event => event.key === 'Backspace' || event.key.length === 1)
+    .map(event => event.timestamp);
+
+  for (const event of replay.replayData) {
+    if (event.key === 'Backspace') {
+      cursor = Math.max(0, cursor - 1);
+      currentPerfectStreak = 0;
+      inBurst = false;
+      continue;
+    }
+    if (event.key.length !== 1) {
+      continue;
+    }
+    if (!event.correct) {
+      const expected = replay.textContent[cursor] ?? event.key;
+      mistakeCounts.set(expected, (mistakeCounts.get(expected) ?? 0) + 1);
+      errorPositions.push(cursor);
+      currentPerfectStreak = 0;
+      if (!inBurst) {
+        correctionBursts += 1;
+        inBurst = true;
+      }
+    } else {
+      currentPerfectStreak += 1;
+      longestPerfectStreak = Math.max(longestPerfectStreak, currentPerfectStreak);
+      inBurst = false;
+    }
+    cursor += 1;
+  }
+
+  const intervals = keyTimestamps.slice(1).map((timestamp, index) => timestamp - keyTimestamps[index]);
+  const averageIntervalMs = Math.round(average(intervals));
+  const hardestCenter = errorPositions[Math.floor(errorPositions.length / 2)] ?? Math.min(12, replay.textContent.length / 2);
+  const hardestSnippet = replay.textContent.slice(Math.max(0, hardestCenter - 12), Math.min(replay.textContent.length, hardestCenter + 18)).trim();
+  const mistakeHotspots = [...mistakeCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([char, errors]) => ({ char, errors }));
+
+  const consistencyScore = Math.round(clamp(
+    100 - stdDev(intervals) / 12 - correctionBursts * 4 - Math.max(0, 96 - replay.accuracy),
+    28,
+    99
+  ));
+
+  const benchmarkRow = db.prepare(`
+    SELECT id, wpm, accuracy
+    FROM typing_replays
+    WHERE device_id = ? AND id != ?
+    ORDER BY wpm DESC, accuracy DESC, duration_ms ASC
+    LIMIT 1
+  `).get(replay.deviceId, replay.id) as { id: number; wpm: number; accuracy: number } | undefined;
+
+  return {
+    totalErrors: replay.replayData.filter(event => event.key.length === 1 && !event.correct).length,
+    correctionBursts,
+    longestPerfectStreak,
+    averageIntervalMs,
+    consistencyScore,
+    hardestSnippet,
+    mistakeHotspots,
+    benchmark: benchmarkRow ? {
+      replayId: benchmarkRow.id,
+      wpm: benchmarkRow.wpm,
+      accuracy: benchmarkRow.accuracy,
+      deltaWpm: Number((replay.wpm - benchmarkRow.wpm).toFixed(1)),
+      deltaAccuracy: Number((replay.accuracy - benchmarkRow.accuracy).toFixed(1)),
+    } : null,
+  };
+}
+
+export function getGrowthOverview(deviceId: string): {
+  readonly streakDays: number;
+  readonly totalSessions: number;
+  readonly totalChars: number;
+  readonly totalReplays: number;
+  readonly rewardLevel: number;
+  readonly unlockedRewards: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly unlocked: boolean;
+  }[];
+  readonly missions: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly progress: number;
+    readonly target: number;
+    readonly reward: string;
+    readonly completed: boolean;
+  }[];
+} {
+  const db = getDb();
+  const profile = getOrCreateProfile(deviceId);
+  const totals = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM leaderboard WHERE device_id = ?) as totalSessions,
+      (SELECT COALESCE(SUM(text_length), 0) FROM leaderboard WHERE device_id = ?) as totalChars,
+      (SELECT COUNT(*) FROM typing_replays WHERE device_id = ?) as totalReplays,
+      (SELECT COUNT(*) FROM game_scores WHERE device_id = ?) as totalGameRuns,
+      (SELECT COUNT(*) FROM leaderboard WHERE device_id = ? AND created_at >= datetime('now', 'start of day')) as todaySessions,
+      (SELECT COUNT(*) FROM typing_replays WHERE device_id = ? AND created_at >= datetime('now', 'start of day')) as todayReplays,
+      (SELECT COUNT(*) FROM game_scores WHERE device_id = ? AND created_at >= datetime('now', 'start of day')) as todayGameRuns,
+      (SELECT COUNT(*) FROM match_history WHERE device_id = ? AND created_at >= datetime('now', 'start of day')) as todayRaces,
+      (SELECT COUNT(*) FROM custom_texts WHERE device_id = ?) as librarySize
+  `).get(deviceId, deviceId, deviceId, deviceId, deviceId, deviceId, deviceId, deviceId, deviceId) as {
+    totalSessions: number;
+    totalChars: number;
+    totalReplays: number;
+    totalGameRuns: number;
+    todaySessions: number;
+    todayReplays: number;
+    todayGameRuns: number;
+    todayRaces: number;
+    librarySize: number;
+  };
+
+  const rewardLevel = 1 + Math.floor((totals.totalSessions + totals.totalGameRuns + profile.streakDays * 2) / 12);
+  const unlockedRewards = [
+    { id: 'frame-bronze', name: 'Bronze Frame', unlocked: totals.totalSessions >= 5 },
+    { id: 'title-streak', name: 'Streak Title', unlocked: profile.streakDays >= 7 },
+    { id: 'avatar-lab', name: 'Replay Analyst Badge', unlocked: totals.totalReplays >= 3 },
+    { id: 'library-keeper', name: 'Library Keeper Theme', unlocked: totals.librarySize >= 5 },
+    { id: 'arcade-aura', name: 'Arcade Aura Trail', unlocked: totals.totalGameRuns >= 10 },
+  ] as const;
+
+  const missions = [
+    { id: 'warmup', title: 'Warm up with two focused sessions', progress: totals.todaySessions, target: 2, reward: '+25 XP' },
+    { id: 'replay-lab', title: 'Save one replay for review', progress: totals.todayReplays, target: 1, reward: 'Replay token' },
+    { id: 'arcade-loop', title: 'Play two typing games', progress: totals.todayGameRuns, target: 2, reward: 'Arcade aura' },
+    { id: 'social-race', title: 'Race one multiplayer match', progress: totals.todayRaces, target: 1, reward: 'Season boost' },
+  ].map(mission => ({
+    ...mission,
+    completed: mission.progress >= mission.target,
+  }));
+
+  return {
+    streakDays: profile.streakDays,
+    totalSessions: totals.totalSessions,
+    totalChars: totals.totalChars,
+    totalReplays: totals.totalReplays,
+    rewardLevel,
+    unlockedRewards,
+    missions,
+  };
+}
+
+export function getGameMeta(deviceId: string): {
+  readonly level: number;
+  readonly totalRuns: number;
+  readonly uniqueGames: number;
+  readonly passportProgress: number;
+  readonly topGames: readonly {
+    readonly gameId: string;
+    readonly plays: number;
+    readonly bestScore: number;
+    readonly avgScore: number;
+    readonly lastPlayed: string;
+  }[];
+  readonly missions: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly progress: number;
+    readonly target: number;
+    readonly completed: boolean;
+  }[];
+} {
+  const db = getDb();
+  const games = db.prepare(`
+    SELECT game_id as gameId, COUNT(*) as plays, MAX(score) as bestScore, ROUND(AVG(score), 1) as avgScore,
+           MAX(created_at) as lastPlayed
+    FROM game_scores
+    WHERE device_id = ?
+    GROUP BY game_id
+    ORDER BY plays DESC, bestScore DESC
+  `).all(deviceId) as {
+    gameId: string;
+    plays: number;
+    bestScore: number;
+    avgScore: number;
+    lastPlayed: string;
+  }[];
+
+  const totalRuns = games.reduce((sum, game) => sum + game.plays, 0);
+  const uniqueGames = games.length;
+  const totalGameCount = 13;
+  const level = 1 + Math.floor((totalRuns + uniqueGames * 2) / 6);
+  const missions = [
+    { id: 'variety', title: 'Try 5 different games', progress: uniqueGames, target: 5 },
+    { id: 'grind', title: 'Finish 12 game runs', progress: totalRuns, target: 12 },
+    { id: 'score', title: 'Break 3 personal bests', progress: games.filter(game => game.bestScore > 0).length, target: 3 },
+  ].map(mission => ({
+    ...mission,
+    completed: mission.progress >= mission.target,
+  }));
+
+  return {
+    level,
+    totalRuns,
+    uniqueGames,
+    passportProgress: Math.round((uniqueGames / totalGameCount) * 100),
+    topGames: games.slice(0, 6),
+    missions,
+  };
 }

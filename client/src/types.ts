@@ -21,6 +21,8 @@ export interface GameRoom {
   readonly startTime: number | null;
   readonly countdownEnd: number | null;
   readonly maxPlayers: number;
+  readonly difficulty?: 'easy' | 'medium' | 'hard';
+  readonly language?: 'en' | 'zh';
 }
 
 export interface TextPassage {

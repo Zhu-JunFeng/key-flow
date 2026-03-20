@@ -1,29 +1,30 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import Navbar from './components/Navbar';
 import ParticleEffect from './components/ParticleEffect';
 import { getWallpaperState, randomizeWallpaper } from './lib/wallpaper';
-import Home from './pages/Home';
 import { handleAuthCallback } from './lib/auth';
 import { connectSocket, socket } from './lib/socket';
 import { getDeviceId } from './lib/device';
-import Lessons from './pages/Lessons';
-import LessonPlay from './pages/LessonPlay';
-import Practice from './pages/Practice';
-import TypingTest from './pages/TypingTest';
-import Multiplayer from './pages/Multiplayer';
-import Leaderboard from './pages/Leaderboard';
-import Settings from './pages/Settings';
-import Dashboard from './pages/Dashboard';
-import DailyChallenge from './pages/DailyChallenge';
-import Friends from './pages/Friends';
-import ReplayPage from './pages/ReplayPage';
-import CodeMode from './pages/CodeMode';
-import Games from './pages/Games';
-import PracticeModes from './pages/PracticeModes';
-import Profile from './pages/Profile';
 import QuoteBar from './components/QuoteBar';
+
+const Home = lazy(() => import('./pages/Home'));
+const Lessons = lazy(() => import('./pages/Lessons'));
+const LessonPlay = lazy(() => import('./pages/LessonPlay'));
+const Practice = lazy(() => import('./pages/Practice'));
+const TypingTest = lazy(() => import('./pages/TypingTest'));
+const Multiplayer = lazy(() => import('./pages/Multiplayer'));
+const Leaderboard = lazy(() => import('./pages/Leaderboard'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const DailyChallenge = lazy(() => import('./pages/DailyChallenge'));
+const Friends = lazy(() => import('./pages/Friends'));
+const ReplayPage = lazy(() => import('./pages/ReplayPage'));
+const CodeMode = lazy(() => import('./pages/CodeMode'));
+const Games = lazy(() => import('./pages/Games'));
+const PracticeModes = lazy(() => import('./pages/PracticeModes'));
+const Profile = lazy(() => import('./pages/Profile'));
 
 const pageVariants = {
   initial: { opacity: 0, y: 20 },
@@ -42,27 +43,46 @@ function AnimatedRoutes() {
         animate="animate"
         exit="exit"
       >
-        <Routes location={location}>
-          <Route path="/" element={<Home />} />
-          <Route path="/lessons" element={<Lessons />} />
-          <Route path="/lessons/:id" element={<LessonPlay />} />
-          <Route path="/practice" element={<Practice />} />
-          <Route path="/practice/code" element={<CodeMode />} />
-          <Route path="/practice/modes" element={<PracticeModes />} />
-          <Route path="/test" element={<TypingTest />} />
-          <Route path="/multiplayer" element={<Multiplayer />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/daily" element={<DailyChallenge />} />
-          <Route path="/friends" element={<Friends />} />
-          <Route path="/replay" element={<ReplayPage />} />
-          <Route path="/replay/:id" element={<ReplayPage />} />
-          <Route path="/games" element={<Games />} />
-          <Route path="/profile" element={<Profile />} />
-        </Routes>
+        <Suspense fallback={<RouteFallback />}>
+          <Routes location={location}>
+            <Route path="/" element={<Home />} />
+            <Route path="/lessons" element={<Lessons />} />
+            <Route path="/lessons/:id" element={<LessonPlay />} />
+            <Route path="/practice" element={<Practice />} />
+            <Route path="/practice/code" element={<CodeMode />} />
+            <Route path="/practice/modes" element={<PracticeModes />} />
+            <Route path="/test" element={<TypingTest />} />
+            <Route path="/multiplayer" element={<Multiplayer />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/daily" element={<DailyChallenge />} />
+            <Route path="/friends" element={<Friends />} />
+            <Route path="/replay" element={<ReplayPage />} />
+            <Route path="/replay/:id" element={<ReplayPage />} />
+            <Route path="/games" element={<Games />} />
+            <Route path="/profile" element={<Profile />} />
+          </Routes>
+        </Suspense>
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+function RouteFallback() {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center">
+      <div
+        className="px-4 py-2 rounded-full text-sm"
+        style={{
+          background: 'var(--glass-bg)',
+          border: '1px solid var(--glass-border)',
+          color: 'var(--text-secondary)',
+        }}
+      >
+        Loading...
+      </div>
+    </div>
   );
 }
 

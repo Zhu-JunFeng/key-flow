@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@arco-design/web-react';
 import { getRandomWords } from '../../lib/gameWords';
+import { useNow } from '../../hooks/useElapsedTime';
 import { useLocale } from '../../lib/hooks';
 import { playKeySound, playErrorSound, playCompleteSound } from '../../lib/sounds';
+import { submitGameScore } from '../../lib/api';
+import GameLeaderboard from './GameLeaderboard';
 
 interface Props {
   readonly onBack: () => void;
@@ -52,7 +55,8 @@ export default function SurvivalMode({ onBack }: Props) {
     const xp = score + maxCombo * 2;
     const currentXp = parseInt(localStorage.getItem('typerace_xp') || '0');
     localStorage.setItem('typerace_xp', String(currentXp + xp));
-  }, [score, maxCombo]);
+    submitGameScore({ gameId: 'survival', score, difficulty }).catch(() => {});
+  }, [score, maxCombo, difficulty]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (gameState !== 'playing') return;
@@ -99,7 +103,8 @@ export default function SurvivalMode({ onBack }: Props) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  const elapsed = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
+  const now = useNow(gameState === 'playing' && startTime !== null, 1000);
+  const elapsed = startTime ? Math.round((now - startTime) / 1000) : 0;
 
   return (
     <div>
@@ -198,6 +203,7 @@ export default function SurvivalMode({ onBack }: Props) {
             <Button type="primary" size="large" onClick={startGame}>{locale === 'zh' ? '再来一局' : 'Play Again'}</Button>
             <Button size="large" onClick={onBack}>{locale === 'zh' ? '返回' : 'Back'}</Button>
           </div>
+          <GameLeaderboard gameId="survival" currentScore={score} />
         </div>
       )}
     </div>

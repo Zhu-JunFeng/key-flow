@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Spin } from '@arco-design/web-react';
-import { fetchDailyStats, fetchKeyErrorStats } from '../lib/api';
+import { fetchDailyStats, fetchDashboardInsights, fetchKeyErrorStats, type DashboardInsights } from '../lib/api';
 import { loadProfile } from '../lib/device';
+import { useLocale } from '../lib/hooks';
 
 interface DailyStat {
   readonly date: string;
@@ -19,9 +20,11 @@ interface KeyStat {
 }
 
 export default function Dashboard() {
+  const locale = useLocale();
   const [dailyStats, setDailyStats] = useState<readonly DailyStat[]>([]);
   const [keyStats, setKeyStats] = useState<readonly KeyStat[]>([]);
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
+  const [insights, setInsights] = useState<DashboardInsights | null>(null);
   const [loading, setLoading] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -30,10 +33,12 @@ export default function Dashboard() {
       fetchDailyStats(30),
       fetchKeyErrorStats(),
       loadProfile(),
-    ]).then(([daily, keys, prof]) => {
+      fetchDashboardInsights(),
+    ]).then(([daily, keys, prof, smartInsights]) => {
       setDailyStats(daily);
       setKeyStats(keys);
       setProfile(prof);
+       setInsights(smartInsights);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -168,6 +173,7 @@ export default function Dashboard() {
     : 0;
   const bestWpm = dailyStats.length > 0 ? Math.round(Math.max(...dailyStats.map(d => d.wpm))) : 0;
   const streakDays = (profile as { streakDays?: number } | null)?.streakDays ?? 0;
+  const coach = insights?.coach;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -175,35 +181,137 @@ export default function Dashboard() {
         <h1 className="text-3xl font-extrabold mb-2" style={{
           background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--primary-color) 100%)',
           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        }}>统计仪表盘</h1>
-        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>追踪你的打字进步</p>
+        }}>{locale === 'zh' ? '统计仪表盘' : 'Dashboard'}</h1>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{locale === 'zh' ? '追踪你的打字进步' : 'Track your typing progress'}</p>
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <SummaryCard label="连续打卡" value={`${streakDays}天`} color="#f59e0b" />
-        <SummaryCard label="平均 WPM" value={String(avgWpm)} color="#6366f1" />
-        <SummaryCard label="最高 WPM" value={String(bestWpm)} color="#10b981" />
-        <SummaryCard label="总练习" value={`${totalSessions}次`} color="#8b5cf6" />
+        <SummaryCard label={locale === 'zh' ? '连续打卡' : 'Streak'} value={locale === 'zh' ? `${streakDays}天` : `${streakDays}d`} color="#f59e0b" />
+        <SummaryCard label={locale === 'zh' ? '平均 WPM' : 'Avg WPM'} value={String(avgWpm)} color="#6366f1" />
+        <SummaryCard label={locale === 'zh' ? '最高 WPM' : 'Best WPM'} value={String(bestWpm)} color="#10b981" />
+        <SummaryCard label={locale === 'zh' ? '总练习' : 'Sessions'} value={locale === 'zh' ? `${totalSessions}次` : String(totalSessions)} color="#8b5cf6" />
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <SummaryCard label="总字符" value={totalChars.toLocaleString()} color="#3b82f6" />
-        <SummaryCard label="总时长" value={`${Math.round(totalTimeMs / 60000)}分`} color="#ec4899" />
-        <SummaryCard label="30天准确率" value={`${dailyStats.length > 0 ? Math.round(dailyStats.reduce((s,d) => s+d.accuracy, 0)/dailyStats.length) : 0}%`} color="#10b981" />
-        <SummaryCard label="日均字符" value={String(dailyStats.length > 0 ? Math.round(totalChars / dailyStats.length) : 0)} color="#f43f5e" />
+        <SummaryCard label={locale === 'zh' ? '总字符' : 'Total Chars'} value={totalChars.toLocaleString()} color="#3b82f6" />
+        <SummaryCard label={locale === 'zh' ? '总时长' : 'Total Time'} value={locale === 'zh' ? `${Math.round(totalTimeMs / 60000)}分` : `${Math.round(totalTimeMs / 60000)}m`} color="#ec4899" />
+        <SummaryCard label={locale === 'zh' ? '30天准确率' : '30d Accuracy'} value={`${dailyStats.length > 0 ? Math.round(dailyStats.reduce((s,d) => s+d.accuracy, 0)/dailyStats.length) : 0}%`} color="#10b981" />
+        <SummaryCard label={locale === 'zh' ? '日均字符' : 'Daily Avg'} value={String(dailyStats.length > 0 ? Math.round(totalChars / dailyStats.length) : 0)} color="#f43f5e" />
       </div>
+
+      {insights && coach && (
+        <>
+          <div className="glass-card p-5 sm:p-6 mb-6" style={{ cursor: 'default' }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5">
+              <div>
+                <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>{locale === 'zh' ? '智能训练建议' : 'Coach Suggestions'}</h2>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  {locale === 'zh' ? '当前优先级' : 'Priority'}: <strong style={{ color: 'var(--primary-color)' }}>{formatPriority(coach.priority, locale)}</strong>
+                  {' '}· {locale === 'zh' ? '推荐模式' : 'Mode'}: <strong style={{ color: '#8b5cf6' }}>{formatMode(coach.recommendedMode, locale)}</strong>
+                  {' '}· {locale === 'zh' ? '建议难度' : 'Difficulty'}: <strong style={{ color: '#f59e0b' }}>{coach.suggestedDifficulty}</strong>
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <MetricChip label={locale === 'zh' ? '目标 WPM' : 'Target WPM'} value={String(coach.targetWpm)} color="#6366f1" />
+                <MetricChip label={locale === 'zh' ? '目标准确率' : 'Target Acc'} value={`${coach.targetAccuracy}%`} color="#10b981" />
+                <MetricChip label={locale === 'zh' ? '周练习次数' : 'Weekly Sessions'} value={String(coach.targetSessions)} color="#f97316" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+              {coach.drills.map(drill => (
+                <div key={drill.id} className="rounded-2xl p-4" style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--glass-border)',
+                }}>
+                  <div className="text-sm font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{drill.title}</div>
+                  <div className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{drill.description}</div>
+                  <div className="mt-3 text-[11px] font-medium" style={{ color: 'var(--primary-color)' }}>{drill.path}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {(coach.focusKeys.length > 0 ? coach.focusKeys : [locale === 'zh' ? '基础键位' : 'home row']).map(key => (
+                <span key={key} className="px-2.5 py-1 rounded-full text-xs font-semibold" style={{
+                  background: 'rgba(239,68,68,0.12)',
+                  border: '1px solid rgba(239,68,68,0.22)',
+                  color: '#ef4444',
+                }}>
+                  {key}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="glass-card p-5" style={{ cursor: 'default' }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
+              <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>{locale === 'zh' ? '本周动量' : 'Weekly Momentum'}</h2>
+              <div className="grid grid-cols-2 gap-3">
+                <SummaryCard label={locale === 'zh' ? '稳定度' : 'Consistency'} value={`${insights.consistencyScore}`} color="#8b5cf6" />
+                <SummaryCard label={locale === 'zh' ? 'WPM 变化' : 'WPM Delta'} value={formatDelta(insights.wpmTrend, 'WPM')} color={insights.wpmTrend >= 0 ? '#10b981' : '#ef4444'} />
+                <SummaryCard label={locale === 'zh' ? '准确率变化' : 'Accuracy Delta'} value={formatDelta(insights.accuracyTrend, '%')} color={insights.accuracyTrend >= 0 ? '#10b981' : '#ef4444'} />
+                <SummaryCard label={locale === 'zh' ? '本周分钟数' : 'Weekly Minutes'} value={String(insights.weeklyMinutes)} color="#3b82f6" />
+              </div>
+              <div className="mt-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                {locale === 'zh'
+                  ? <>本周已完成 <strong style={{ color: 'var(--primary-color)' }}>{insights.weeklySessions}</strong> 次训练，累计输入 <strong style={{ color: '#f97316' }}>{insights.weeklyChars.toLocaleString()}</strong> 字符。</>
+                  : <>This week you completed <strong style={{ color: 'var(--primary-color)' }}>{insights.weeklySessions}</strong> sessions and typed <strong style={{ color: '#f97316' }}>{insights.weeklyChars.toLocaleString()}</strong> chars.</>}
+                {insights.bestHour && (
+                  <>
+                    {locale === 'zh'
+                      ? <> 你的高峰时段在 <strong style={{ color: '#10b981' }}>{formatHour(insights.bestHour.hour)}</strong> 左右，平均可达到 <strong style={{ color: '#10b981' }}>{insights.bestHour.avgWpm} WPM</strong>。</>
+                      : <> Your best hour is around <strong style={{ color: '#10b981' }}>{formatHour(insights.bestHour.hour)}</strong>, where you average <strong style={{ color: '#10b981' }}>{insights.bestHour.avgWpm} WPM</strong>.</>}
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="glass-card p-5" style={{ cursor: 'default' }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
+              <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>{locale === 'zh' ? '模式拆解' : 'Mode Breakdown'}</h2>
+              {insights.modeBreakdown.length === 0 ? (
+                <div className="text-sm py-8 text-center" style={{ color: 'var(--text-muted)' }}>{locale === 'zh' ? '开始练习后这里会给出模式画像' : 'Start practicing to unlock mode insights'}</div>
+              ) : (
+                <div className="space-y-3">
+                  {insights.modeBreakdown.map(mode => (
+                    <div key={mode.mode} className="rounded-2xl p-3.5" style={{
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--glass-border)',
+                    }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold capitalize" style={{ color: 'var(--text-primary)' }}>{mode.mode}</span>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{mode.sessions} {locale === 'zh' ? '次' : ''}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        <span>{locale === 'zh' ? '均速' : 'Avg'} <strong style={{ color: '#6366f1' }}>{mode.avgWpm} WPM</strong></span>
+                        <span>{locale === 'zh' ? '准确率' : 'Accuracy'} <strong style={{ color: '#10b981' }}>{mode.avgAccuracy}%</strong></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* WPM Trend Chart */}
       <div className="glass-card p-4 sm:p-6 mb-6" style={{ cursor: 'default' }}
         onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
         onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
-        <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>WPM 趋势 (30天)</h2>
+        <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>{locale === 'zh' ? 'WPM 趋势 (30天)' : 'WPM Trend (30d)'}</h2>
         {dailyStats.length > 0 ? (
           <canvas ref={canvasRef} style={{ width: '100%', height: '240px' }} />
         ) : (
           <div className="text-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>
-            还没有数据，开始练习吧！
+            {locale === 'zh' ? '还没有数据，开始练习吧！' : 'No data yet. Start practicing.'}
           </div>
         )}
       </div>
@@ -213,13 +321,13 @@ export default function Dashboard() {
         onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
         onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>按键错误热力图</h2>
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{locale === 'zh' ? '按键错误热力图' : 'Key Error Heatmap'}</h2>
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-medium" style={{ color: '#10b981' }}>优秀</span>
+            <span className="text-[10px] font-medium" style={{ color: '#10b981' }}>{locale === 'zh' ? '优秀' : 'Strong'}</span>
             <div className="w-24 h-2 rounded-full overflow-hidden" style={{
               background: 'linear-gradient(90deg, #10b981, #fbbf24, #ef4444)',
             }} />
-            <span className="text-[10px] font-medium" style={{ color: '#ef4444' }}>薄弱</span>
+            <span className="text-[10px] font-medium" style={{ color: '#ef4444' }}>{locale === 'zh' ? '薄弱' : 'Weak'}</span>
           </div>
         </div>
         <div className="flex flex-col items-center gap-1 sm:gap-[6px] py-3 sm:py-4 px-1 sm:px-2 rounded-2xl overflow-x-auto" style={{
@@ -298,11 +406,11 @@ export default function Dashboard() {
                         }}>
                         <div className="font-bold text-sm mb-1" style={{ color: '#fff' }}>{key.toUpperCase()}</div>
                         <div className="flex gap-3">
-                          <span><span style={{ color: '#34d399' }}>{stat!.correct}</span> 正确</span>
-                          <span><span style={{ color: '#f87171' }}>{stat!.incorrect}</span> 错误</span>
+                          <span><span style={{ color: '#34d399' }}>{stat!.correct}</span> {locale === 'zh' ? '正确' : 'correct'}</span>
+                          <span><span style={{ color: '#f87171' }}>{stat!.incorrect}</span> {locale === 'zh' ? '错误' : 'errors'}</span>
                         </div>
                         <div className="mt-1">
-                          准确率: <span style={{ color: accuracy >= 90 ? '#34d399' : accuracy >= 75 ? '#fbbf24' : '#f87171', fontWeight: 700 }}>{accuracy}%</span>
+                          {locale === 'zh' ? '准确率' : 'Accuracy'}: <span style={{ color: accuracy >= 90 ? '#34d399' : accuracy >= 75 ? '#fbbf24' : '#f87171', fontWeight: 700 }}>{accuracy}%</span>
                         </div>
                         <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0"
                           style={{ borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid #1e293b' }} />
@@ -323,7 +431,7 @@ export default function Dashboard() {
                 color: 'var(--text-muted)',
                 boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)',
               }}>
-              space
+              {locale === 'zh' ? '空格' : 'space'}
             </div>
           </div>
         </div>
@@ -339,10 +447,10 @@ export default function Dashboard() {
             .slice(0, 3);
           return (
             <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 mt-4 text-[10px] sm:text-xs" style={{ color: 'var(--text-muted)' }}>
-              <span>总准确率: <strong style={{ color: overallAccuracy >= 90 ? '#10b981' : overallAccuracy >= 75 ? '#eab308' : '#ef4444' }}>{overallAccuracy}%</strong></span>
-              <span>总按键: <strong style={{ color: 'var(--text-secondary)' }}>{totalAll.toLocaleString()}</strong></span>
+              <span>{locale === 'zh' ? '总准确率' : 'Overall accuracy'}: <strong style={{ color: overallAccuracy >= 90 ? '#10b981' : overallAccuracy >= 75 ? '#eab308' : '#ef4444' }}>{overallAccuracy}%</strong></span>
+              <span>{locale === 'zh' ? '总按键' : 'Total keys'}: <strong style={{ color: 'var(--text-secondary)' }}>{totalAll.toLocaleString()}</strong></span>
               {worstKeys.length > 0 && (
-                <span>最薄弱: {worstKeys.map(k => (
+                <span>{locale === 'zh' ? '最薄弱' : 'Weakest'}: {worstKeys.map(k => (
                   <strong key={k.keyChar} className="inline-flex items-center justify-center w-5 h-5 rounded mx-0.5 text-[10px]"
                     style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
                     {k.keyChar}
@@ -369,4 +477,43 @@ function SummaryCard({ label, value, color }: { readonly label: string; readonly
       <div className="text-xl font-bold tabular-nums" style={{ color }}>{value}</div>
     </div>
   );
+}
+
+function MetricChip({ label, value, color }: { readonly label: string; readonly value: string; readonly color: string }) {
+  return (
+    <div className="px-3 py-2 rounded-2xl min-w-[88px]" style={{
+      background: 'var(--bg-card)',
+      border: '1px solid var(--glass-border)',
+    }}>
+      <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{label}</div>
+      <div className="text-sm font-bold tabular-nums mt-1" style={{ color }}>{value}</div>
+    </div>
+  );
+}
+
+function formatDelta(value: number, suffix: string): string {
+  return `${value >= 0 ? '+' : ''}${value}${suffix}`;
+}
+
+function formatPriority(priority: DashboardInsights['coach']['priority'], locale: 'zh' | 'en'): string {
+  switch (priority) {
+    case 'accuracy': return locale === 'zh' ? '准确率修正' : 'Accuracy';
+    case 'stamina': return locale === 'zh' ? '耐力节奏' : 'Stamina';
+    case 'competition': return locale === 'zh' ? '实战对抗' : 'Competition';
+    default: return locale === 'zh' ? '速度推进' : 'Speed';
+  }
+}
+
+function formatMode(mode: DashboardInsights['coach']['recommendedMode'], locale: 'zh' | 'en'): string {
+  switch (mode) {
+    case 'lessons': return locale === 'zh' ? '课程' : 'Lessons';
+    case 'code': return locale === 'zh' ? '代码模式' : 'Code Mode';
+    case 'multiplayer': return locale === 'zh' ? '多人竞速' : 'Multiplayer';
+    case 'daily': return locale === 'zh' ? '每日挑战' : 'Daily Challenge';
+    default: return locale === 'zh' ? '自由练习' : 'Practice';
+  }
+}
+
+function formatHour(hour: number): string {
+  return `${String(hour).padStart(2, '0')}:00`;
 }

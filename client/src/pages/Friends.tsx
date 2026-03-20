@@ -6,6 +6,26 @@ import { getAvatar } from '../lib/avatars';
 import { socket, connectSocket } from '../lib/socket';
 import { t } from '../lib/i18n';
 import { useLocale } from '../lib/hooks';
+import { getStoredAvatar, getStoredNickname } from '../lib/userPrefs';
+
+function copyText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  }
+  return fallbackCopy(text);
+}
+
+function fallbackCopy(text: string): Promise<void> {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+  return Promise.resolve();
+}
 
 interface FriendInfo {
   readonly deviceId: string;
@@ -37,15 +57,20 @@ export default function Friends() {
   const [joinRoomCode, setJoinRoomCode] = useState('');
 
   const refreshData = useCallback(async () => {
-    const [f, p, profile] = await Promise.all([
-      fetchFriends(),
-      fetchPendingRequests(),
-      loadProfile(),
-    ]);
-    setFriends(f as FriendInfo[]);
-    setPending(p);
-    setMyCode((profile as { friendsCode?: string }).friendsCode ?? '');
-    setLoading(false);
+    try {
+      const [f, p, profile] = await Promise.all([
+        fetchFriends(),
+        fetchPendingRequests(),
+        loadProfile(),
+      ]);
+      setFriends(f as FriendInfo[]);
+      setPending(p);
+      setMyCode((profile as { friendsCode?: string }).friendsCode ?? '');
+    } catch (err) {
+      console.error('Failed to load friends data:', err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -87,6 +112,8 @@ export default function Friends() {
         Message.success(t('friends.requestSent', locale));
         setFriendCode('');
         refreshData();
+      } else {
+        Message.warning(locale === 'zh' ? '好友请求已发送或对方已是好友' : 'Request already sent or already friends');
       }
     } catch (err: unknown) {
       Message.error((err as Error).message || t('common.error', locale));
@@ -107,16 +134,23 @@ export default function Friends() {
   };
 
   const handleCreatePrivateRoom = () => {
-    const nickname = localStorage.getItem('nickname') ?? 'Guest';
-    const avatar = parseInt(localStorage.getItem('avatar') ?? '0');
-    socket.emit('room:create-private', { nickname, avatar });
+    const deviceId = getDeviceId();
+    socket.emit('room:create-private', {
+      deviceId,
+      nickname: getStoredNickname('Guest'),
+      avatar: getStoredAvatar(),
+    });
   };
 
   const handleJoinPrivateRoom = () => {
     if (!joinRoomCode.trim()) return;
-    const nickname = localStorage.getItem('nickname') ?? 'Guest';
-    const avatar = parseInt(localStorage.getItem('avatar') ?? '0');
-    socket.emit('room:join-private', { roomId: joinRoomCode.trim(), nickname, avatar });
+    const deviceId = getDeviceId();
+    socket.emit('room:join-private', {
+      roomId: joinRoomCode.trim(),
+      deviceId,
+      nickname: getStoredNickname('Guest'),
+      avatar: getStoredAvatar(),
+    });
   };
 
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><Spin size={32} /></div>;
@@ -140,7 +174,7 @@ export default function Friends() {
             <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{t('friends.myCode', locale)}</span>
             <div className="text-2xl font-mono font-bold tracking-[0.3em] mt-1" style={{ color: 'var(--primary-color)' }}>{myCode}</div>
           </div>
-          <Button size="small" onClick={() => { navigator.clipboard.writeText(myCode); Message.success(t('friends.copied', locale)); }}>{t('friends.copy', locale)}</Button>
+          <Button size="small" onClick={() => { copyText(myCode).then(() => Message.success(t('friends.copied', locale))); }}>{t('friends.copy', locale)}</Button>
         </div>
       </div>
 
@@ -216,7 +250,7 @@ export default function Friends() {
             <div className="p-3 rounded-xl" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
               <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('friends.roomCode', locale)}:</span>
               <span className="text-lg font-mono font-bold ml-2" style={{ color: 'var(--primary-color)' }}>{privateRoomId}</span>
-              <Button size="small" className="ml-3" onClick={() => { navigator.clipboard.writeText(privateRoomId); Message.success(t('friends.copied', locale)); }}>{t('friends.copy', locale)}</Button>
+              <Button size="small" className="ml-3" onClick={() => { copyText(privateRoomId).then(() => Message.success(t('friends.copied', locale))); }}>{t('friends.copy', locale)}</Button>
             </div>
           ) : (
             <Button type="primary" onClick={handleCreatePrivateRoom}>{t('friends.createRoom', locale)}</Button>

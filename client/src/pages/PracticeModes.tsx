@@ -3,6 +3,7 @@ import { Button, Radio } from '@arco-design/web-react';
 import TypingArea from '../components/TypingArea';
 import VirtualKeyboard from '../components/VirtualKeyboard';
 import Stats from '../components/Stats';
+import { useElapsedTime } from '../hooks/useElapsedTime';
 import { useTyping } from '../hooks/useTyping';
 import { resumeAudioContext } from '../lib/sounds';
 import { reportSession } from '../lib/api';
@@ -91,7 +92,7 @@ export default function PracticeModes() {
       {mode === 'free' && <FreeMode onBack={() => setMode(null)} />}
       {mode === 'strict' && <StrictMode onBack={() => setMode(null)} />}
       {mode === 'symbols' && <SymbolMode onBack={() => setMode(null)} />}
-      {mode === 'classics' && <ClassicsMode onBack={() => setMode(null)} />}
+      {mode === 'classics' && <ClassicsMode />}
       {mode === 'quotes' && <QuotesMode onBack={() => setMode(null)} />}
     </div>
   );
@@ -132,13 +133,13 @@ function WordCountMode({ onBack }: { readonly onBack: () => void }) {
     );
   }
 
-  return <PracticeSession text={practiceText} onBack={onBack} onNew={startChallenge} modeName="wordcount" />;
+  return <PracticeSession text={practiceText} onBack={onBack} onNew={startChallenge} />;
 }
 
 // ============ Free Practice ============
 function FreeMode({ onBack }: { readonly onBack: () => void }) {
   const [practiceText] = useState(() => generateWordCountText(30));
-  return <PracticeSession text={practiceText} onBack={onBack} onNew={() => window.location.reload()} modeName="free" hiddenStats />;
+  return <PracticeSession text={practiceText} onBack={onBack} onNew={() => window.location.reload()} hiddenStats />;
 }
 
 // ============ Strict Mode ============
@@ -170,7 +171,7 @@ function StrictMode({ onBack }: { readonly onBack: () => void }) {
 
   return <PracticeSession text={practiceText} onBack={onBack} onNew={() => {
     setPracticeText(generateWordCountText(30));
-  }} modeName="strict" strictMode />;
+  }} strictMode />;
 }
 
 // ============ Symbol Training ============
@@ -208,11 +209,11 @@ function SymbolMode({ onBack }: { readonly onBack: () => void }) {
 
   return <PracticeSession text={practiceText} onBack={onBack} onNew={() => {
     setPracticeText(generateSymbolText(symbolType, 4));
-  }} modeName="symbols" />;
+  }} />;
 }
 
 // ============ Classics Mode ============
-function ClassicsMode({ onBack: _onBack }: { readonly onBack: () => void }) {
+function ClassicsMode() {
   const locale = useLocale();
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const passages = locale === 'zh' ? CLASSIC_PASSAGES.zh : CLASSIC_PASSAGES.en;
@@ -235,7 +236,7 @@ function ClassicsMode({ onBack: _onBack }: { readonly onBack: () => void }) {
   return <PracticeSession text={passages[selectedIdx].text} displayText={(passages[selectedIdx] as { display?: string }).display} onBack={() => setSelectedIdx(null)} onNew={() => {
     const next = (selectedIdx + 1) % passages.length;
     setSelectedIdx(next);
-  }} modeName="classics" />;
+  }} />;
 }
 
 // ============ Quotes Mode ============
@@ -250,7 +251,7 @@ function QuotesMode({ onBack }: { readonly onBack: () => void }) {
       </div>
       <PracticeSession text={quote.text} onBack={onBack} onNew={() => {
         setQuoteIdx((quoteIdx + 1) % FAMOUS_QUOTES.length);
-      }} modeName="quotes" />
+      }} />
     </div>
   );
 }
@@ -261,7 +262,6 @@ function PracticeSession({
   displayText,
   onBack,
   onNew,
-  modeName: _modeName,
   strictMode = false,
   hiddenStats = false,
 }: {
@@ -269,7 +269,6 @@ function PracticeSession({
   readonly displayText?: string;
   readonly onBack: () => void;
   readonly onNew: () => void;
-  readonly modeName: string;
   readonly strictMode?: boolean;
   readonly hiddenStats?: boolean;
 }) {
@@ -293,7 +292,13 @@ function PracticeSession({
 
   const { state, handleKeyDown, reset } = useTyping(text, onProgress, typingOptions);
 
-  useEffect(() => { reset(); setCombo(0); setMaxCombo(0); }, [text, reset]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      reset();
+      setCombo(0);
+      setMaxCombo(0);
+    });
+  }, [text, reset]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -321,7 +326,7 @@ function PracticeSession({
     return () => window.removeEventListener('keydown', handler);
   }, [handleKeyDown, text, state.currentIndex]);
 
-  const timeElapsed = state.startTime ? (state.endTime ?? Date.now()) - state.startTime : undefined;
+  const timeElapsed = useElapsedTime(state.startTime, state.endTime);
 
   return (
     <div>

@@ -3,6 +3,8 @@ import { Button } from '@arco-design/web-react';
 import { getRandomWord } from '../../lib/gameWords';
 import { useLocale } from '../../lib/hooks';
 import { playKeySound, playErrorSound } from '../../lib/sounds';
+import { submitGameScore } from '../../lib/api';
+import GameLeaderboard from './GameLeaderboard';
 
 interface Props {
   readonly onBack: () => void;
@@ -26,6 +28,7 @@ export default function TowerDefense({ onBack }: Props) {
   const [lives, setLives] = useState(5);
   const [killed, setKilled] = useState(0);
   const [targetEnemy, setTargetEnemy] = useState<number | null>(null);
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
 
   const inputRef = useRef<HTMLInputElement>(null);
   const animFrameRef = useRef<number>(0);
@@ -35,16 +38,20 @@ export default function TowerDefense({ onBack }: Props) {
   const enemiesRef = useRef(enemies);
   const livesRef = useRef(lives);
   const killedRef = useRef(0);
+  const scoreRef = useRef(0);
+  const difficultyRef = useRef(difficulty);
 
   gameStateRef.current = gameState;
   enemiesRef.current = enemies;
   livesRef.current = lives;
+  scoreRef.current = score;
+  difficultyRef.current = difficulty;
 
   const BASE_POSITION = 95; // where the base is
 
   const spawnEnemy = useCallback(() => {
-    const difficulty = wave <= 3 ? 'easy' : wave <= 6 ? 'medium' : 'hard';
-    const word = getRandomWord(difficulty as 'easy' | 'medium' | 'hard');
+    const wordDiff = difficulty === 'easy' ? 'easy' : difficulty === 'hard' ? (wave <= 3 ? 'medium' : 'hard') : (wave <= 3 ? 'easy' : wave <= 6 ? 'medium' : 'hard');
+    const word = getRandomWord(wordDiff);
     const colors = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444'];
     const newEnemy: Enemy = {
       id: enemyIdRef.current++,
@@ -54,7 +61,7 @@ export default function TowerDefense({ onBack }: Props) {
       color: colors[Math.floor(Math.random() * colors.length)],
     };
     setEnemies(prev => [...prev, newEnemy]);
-  }, [wave]);
+  }, [wave, difficulty]);
 
   const startGame = useCallback(() => {
     setScore(0);
@@ -108,6 +115,10 @@ export default function TowerDefense({ onBack }: Props) {
             if (newHp <= 0) {
               setGameState('gameover');
               gameStateRef.current = 'gameover';
+              const xp = Math.round(scoreRef.current / 2) + killedRef.current * 3;
+              const currentXp = parseInt(localStorage.getItem('typerace_xp') || '0');
+              localStorage.setItem('typerace_xp', String(currentXp + xp));
+              submitGameScore({ gameId: 'tower', score: scoreRef.current, difficulty: difficultyRef.current }).catch(() => {});
             }
             return Math.max(0, newHp);
           });
@@ -182,6 +193,19 @@ export default function TowerDefense({ onBack }: Props) {
               ? '敌人从左边冲来！打出它们身上的单词来消灭它们，保护你的基地！'
               : 'Enemies approach from the left! Type their words to destroy them and protect your base!'}
           </p>
+          <div className="flex justify-center gap-2">
+            {(['easy', 'medium', 'hard'] as const).map(d => (
+              <button key={d} onClick={() => setDifficulty(d)}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                style={{
+                  background: difficulty === d ? 'rgba(99,102,241,0.15)' : 'var(--bg-card)',
+                  color: difficulty === d ? 'var(--primary-color)' : 'var(--text-secondary)',
+                  border: `1px solid ${difficulty === d ? 'var(--primary-color)' : 'var(--glass-border)'}`,
+                }}>
+                {d === 'easy' ? (locale === 'zh' ? '简单' : 'Easy') : d === 'medium' ? (locale === 'zh' ? '中等' : 'Medium') : (locale === 'zh' ? '困难' : 'Hard')}
+              </button>
+            ))}
+          </div>
           <Button type="primary" size="large" onClick={startGame}>
             {locale === 'zh' ? '开始防守' : 'Start Defense'}
           </Button>
@@ -299,6 +323,7 @@ export default function TowerDefense({ onBack }: Props) {
             <Button type="primary" size="large" onClick={startGame}>{locale === 'zh' ? '再来一局' : 'Play Again'}</Button>
             <Button size="large" onClick={onBack}>{locale === 'zh' ? '返回' : 'Back'}</Button>
           </div>
+          <GameLeaderboard gameId="tower" currentScore={score} />
         </div>
       )}
     </div>

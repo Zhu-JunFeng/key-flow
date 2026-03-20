@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLocale } from '../lib/hooks';
 
 interface Quote {
   readonly text: string;
@@ -23,6 +24,7 @@ const FALLBACK_QUOTES: readonly Quote[] = [
 ];
 
 export default function QuoteBar() {
+  const locale = useLocale();
   const [quote, setQuote] = useState<Quote | null>(null);
   const [spinning, setSpinning] = useState(false);
 
@@ -72,7 +74,7 @@ export default function QuoteBar() {
             background: 'rgba(255,255,255,0.6)',
             border: '1px solid rgba(226,232,240,0.5)',
           }}
-          title="换一句"
+          title={locale === 'zh' ? '换一句' : 'Next quote'}
         >
           <svg
             className={`w-2.5 h-2.5 transition-transform duration-500 ${spinning ? 'animate-spin' : ''}`}

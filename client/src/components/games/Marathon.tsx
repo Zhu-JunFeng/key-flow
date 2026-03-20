@@ -3,6 +3,8 @@ import { Button } from '@arco-design/web-react';
 import { getRandomWords } from '../../lib/gameWords';
 import { useLocale } from '../../lib/hooks';
 import { playKeySound, playErrorSound, playCompleteSound } from '../../lib/sounds';
+import { submitGameScore } from '../../lib/api';
+import GameLeaderboard from './GameLeaderboard';
 
 interface Props {
   readonly onBack: () => void;
@@ -26,12 +28,13 @@ export default function Marathon({ onBack }: Props) {
   const [maxCombo, setMaxCombo] = useState(0);
   const [lastMilestone, setLastMilestone] = useState(0);
   const [showMilestone, setShowMilestone] = useState<string | null>(null);
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
 
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startGame = useCallback(() => {
-    const newWords = getRandomWords(100, 'medium');
+    const newWords = getRandomWords(100, difficulty);
     setWords(newWords);
     setCurrentWordIdx(0);
     setInput('');
@@ -46,7 +49,7 @@ export default function Marathon({ onBack }: Props) {
     setShowMilestone(null);
     setGameState('playing');
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, []);
+  }, [difficulty]);
 
   // Timer
   useEffect(() => {
@@ -62,24 +65,14 @@ export default function Marathon({ onBack }: Props) {
     };
   }, [gameState, startTime]);
 
-  // Check milestones
-  useEffect(() => {
-    const idx = MILESTONES.findIndex(m => m === wordsCompleted);
-    if (idx >= 0 && wordsCompleted > lastMilestone) {
-      setLastMilestone(wordsCompleted);
-      setShowMilestone(`${MILESTONE_EMOJIS[idx]} ${wordsCompleted} ${locale === 'zh' ? '词!' : 'words!'}`);
-      playCompleteSound();
-      setTimeout(() => setShowMilestone(null), 2000);
-    }
-  }, [wordsCompleted, lastMilestone, locale]);
-
   const finishGame = useCallback(() => {
     setGameState('finished');
     playCompleteSound();
     const xp = wordsCompleted * 2 + maxCombo;
     const currentXp = parseInt(localStorage.getItem('typerace_xp') || '0');
     localStorage.setItem('typerace_xp', String(currentXp + xp));
-  }, [wordsCompleted, maxCombo]);
+    submitGameScore({ gameId: 'marathon', score: wordsCompleted, difficulty }).catch(() => {});
+  }, [wordsCompleted, maxCombo, difficulty]);
 
   const handleInput = (value: string) => {
     if (gameState !== 'playing') return;
@@ -106,13 +99,21 @@ export default function Marathon({ onBack }: Props) {
         setCombo(0);
       }
 
-      setWordsCompleted(prev => prev + 1);
+      const completedWords = wordsCompleted + 1;
+      setWordsCompleted(completedWords);
+      const milestoneIdx = MILESTONES.findIndex(m => m === completedWords);
+      if (milestoneIdx >= 0 && completedWords > lastMilestone) {
+        setLastMilestone(completedWords);
+        setShowMilestone(`${MILESTONE_EMOJIS[milestoneIdx]} ${completedWords} ${locale === 'zh' ? '词!' : 'words!'}`);
+        playCompleteSound();
+        setTimeout(() => setShowMilestone(null), 2000);
+      }
       setInput('');
 
       const nextIdx = currentWordIdx + 1;
       if (nextIdx >= words.length) {
         // Load more words
-        const moreWords = getRandomWords(100, 'medium');
+        const moreWords = getRandomWords(100, difficulty);
         setWords(prev => [...prev, ...moreWords]);
       }
       setCurrentWordIdx(nextIdx);
@@ -149,6 +150,19 @@ export default function Marathon({ onBack }: Props) {
               ? '没有时间限制，持续打字，看你能坚持多久！每达到里程碑都有庆祝。随时可以结束。'
               : 'No time limit. Keep typing as long as you can! Milestones celebrate your progress. Stop whenever you want.'}
           </p>
+          <div className="flex justify-center gap-2">
+            {(['easy', 'medium', 'hard'] as const).map(d => (
+              <button key={d} onClick={() => setDifficulty(d)}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                style={{
+                  background: difficulty === d ? 'rgba(99,102,241,0.15)' : 'var(--bg-card)',
+                  color: difficulty === d ? 'var(--primary-color)' : 'var(--text-secondary)',
+                  border: `1px solid ${difficulty === d ? 'var(--primary-color)' : 'var(--glass-border)'}`,
+                }}>
+                {d === 'easy' ? (locale === 'zh' ? '简单' : 'Easy') : d === 'medium' ? (locale === 'zh' ? '中等' : 'Medium') : (locale === 'zh' ? '困难' : 'Hard')}
+              </button>
+            ))}
+          </div>
           <Button type="primary" size="large" onClick={startGame}>
             {locale === 'zh' ? '开始跑步' : 'Start Running'}
           </Button>
@@ -291,6 +305,7 @@ export default function Marathon({ onBack }: Props) {
             <Button type="primary" size="large" onClick={startGame}>{locale === 'zh' ? '再来一局' : 'Play Again'}</Button>
             <Button size="large" onClick={onBack}>{locale === 'zh' ? '返回' : 'Back'}</Button>
           </div>
+          <GameLeaderboard gameId="marathon" currentScore={wordsCompleted} />
         </div>
       )}
     </div>

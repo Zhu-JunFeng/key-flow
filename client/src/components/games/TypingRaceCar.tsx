@@ -3,6 +3,8 @@ import { Button } from '@arco-design/web-react';
 import { getRandomWords } from '../../lib/gameWords';
 import { useLocale } from '../../lib/hooks';
 import { playKeySound, playErrorSound, playCompleteSound } from '../../lib/sounds';
+import { submitGameScore } from '../../lib/api';
+import GameLeaderboard from './GameLeaderboard';
 
 interface Props {
   readonly onBack: () => void;
@@ -24,13 +26,14 @@ export default function TypingRaceCar({ onBack }: Props) {
   const [correctChars, setCorrectChars] = useState(0);
   const [gear, setGear] = useState(1);
   const [boostActive, setBoostActive] = useState(false);
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
 
   const inputRef = useRef<HTMLInputElement>(null);
   const startTimeRef = useRef(0);
   const lastWordTimeRef = useRef(0);
 
   const startGame = useCallback(() => {
-    const newWords = getRandomWords(100, 'medium');
+    const newWords = getRandomWords(100, difficulty);
     setWords(newWords);
     setCurrentWordIdx(0);
     setInput('');
@@ -45,7 +48,7 @@ export default function TypingRaceCar({ onBack }: Props) {
     lastWordTimeRef.current = Date.now();
     setGameState('playing');
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, []);
+  }, [difficulty]);
 
   // Timer & physics
   useEffect(() => {
@@ -78,10 +81,11 @@ export default function TypingRaceCar({ onBack }: Props) {
         const xp = wordsCompleted * 2 + Math.round(distance / 50);
         const currentXp = parseInt(localStorage.getItem('typerace_xp') || '0');
         localStorage.setItem('typerace_xp', String(currentXp + xp));
+        submitGameScore({ gameId: 'racecar', score: Math.round(distance), difficulty }).catch(() => {});
       }
     }, 100);
     return () => clearInterval(interval);
-  }, [gameState, correctChars, wordsCompleted, distance]);
+  }, [gameState, correctChars, wordsCompleted, distance, difficulty]);
 
   const handleInput = (value: string) => {
     if (gameState !== 'playing') return;
@@ -106,7 +110,7 @@ export default function TypingRaceCar({ onBack }: Props) {
 
       const nextIdx = currentWordIdx + 1;
       if (nextIdx >= words.length) {
-        const moreWords = getRandomWords(100, 'medium');
+        const moreWords = getRandomWords(100, difficulty);
         setWords(prev => [...prev, ...moreWords]);
       }
       setCurrentWordIdx(nextIdx);
@@ -136,6 +140,19 @@ export default function TypingRaceCar({ onBack }: Props) {
               ? '你的打字速度就是车速！60秒内跑尽可能远的距离。打字越快，档位越高！'
               : 'Your typing speed IS your car speed! Drive as far as you can in 60 seconds. Faster typing = higher gear!'}
           </p>
+          <div className="flex justify-center gap-2">
+            {(['easy', 'medium', 'hard'] as const).map(d => (
+              <button key={d} onClick={() => setDifficulty(d)}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                style={{
+                  background: difficulty === d ? 'rgba(99,102,241,0.15)' : 'var(--bg-card)',
+                  color: difficulty === d ? 'var(--primary-color)' : 'var(--text-secondary)',
+                  border: `1px solid ${difficulty === d ? 'var(--primary-color)' : 'var(--glass-border)'}`,
+                }}>
+                {d === 'easy' ? (locale === 'zh' ? '简单' : 'Easy') : d === 'medium' ? (locale === 'zh' ? '中等' : 'Medium') : (locale === 'zh' ? '困难' : 'Hard')}
+              </button>
+            ))}
+          </div>
           <Button type="primary" size="large" onClick={startGame}>
             {locale === 'zh' ? '发动引擎' : 'Start Engine'}
           </Button>
@@ -300,6 +317,7 @@ export default function TypingRaceCar({ onBack }: Props) {
             <Button type="primary" size="large" onClick={startGame}>{locale === 'zh' ? '再来一局' : 'Play Again'}</Button>
             <Button size="large" onClick={onBack}>{locale === 'zh' ? '返回' : 'Back'}</Button>
           </div>
+          <GameLeaderboard gameId="racecar" currentScore={Math.round(distance)} />
         </div>
       )}
     </div>

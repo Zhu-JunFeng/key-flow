@@ -1,4 +1,5 @@
 import { getAvatar } from '../lib/avatars';
+import { useLocale } from '../lib/hooks';
 import type { RoomPlayer } from '../types';
 
 interface RaceTrackProps {
@@ -8,6 +9,7 @@ interface RaceTrackProps {
 }
 
 export default function RaceTrack({ players, textLength, currentPlayerId }: RaceTrackProps) {
+  const locale = useLocale();
   const sortedPlayers = [...players].sort((a, b) => {
     if (a.finished && b.finished) return (a.rank ?? 0) - (b.rank ?? 0);
     if (a.finished) return -1;
@@ -23,8 +25,12 @@ export default function RaceTrack({ players, textLength, currentPlayerId }: Race
       boxShadow: 'var(--glass-shadow)',
     }}>
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Race Track</h3>
-        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{players.length} players</div>
+        <h3 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+          {locale === 'zh' ? '赛道进度' : 'Race Track'}
+        </h3>
+        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          {players.length} {locale === 'zh' ? '名玩家' : 'players'}
+        </div>
       </div>
 
       {sortedPlayers.map((player) => {
@@ -40,15 +46,15 @@ export default function RaceTrack({ players, textLength, currentPlayerId }: Race
                 {player.rank && (
                   <span className={`text-xs font-bold w-5 text-center ${
                     player.rank === 1 ? 'text-amber-500' :
-                    player.rank === 2 ? 'text-slate-600' :
-                    player.rank === 3 ? 'text-amber-700' : 'text-slate-600'
+                    player.rank === 2 ? 'text-slate-500 dark:text-slate-400' :
+                    player.rank === 3 ? 'text-amber-700' : 'text-slate-500 dark:text-slate-400'
                   }`}>
                     #{player.rank}
                   </span>
                 )}
-                <span className={`text-sm font-medium ${isMe ? 'text-indigo-600' : 'text-slate-700'}`}>
+                <span className={`text-sm font-medium`} style={{ color: isMe ? 'var(--primary-color)' : 'var(--text-primary)' }}>
                   {player.nickname}
-                  {isMe && <span className="text-indigo-400 text-xs ml-1">(你)</span>}
+                  {isMe && <span className="text-xs ml-1" style={{ color: 'var(--primary-color)', opacity: 0.7 }}>{locale === 'zh' ? '(你)' : '(You)'}</span>}
                 </span>
               </div>
               <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
@@ -80,7 +86,7 @@ export default function RaceTrack({ players, textLength, currentPlayerId }: Race
                 </div>
               </div>
 
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-600 font-mono tabular-nums">
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono tabular-nums" style={{ color: 'var(--text-muted)' }}>
                 {progressPercent}%
               </div>
             </div>

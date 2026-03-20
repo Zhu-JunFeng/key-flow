@@ -9,71 +9,100 @@ import {
 
 interface QueueEntry {
   readonly socketId: string;
+  readonly deviceId: string | null;
   readonly nickname: string;
   readonly avatar: number;
   readonly joinedAt: number;
+  readonly difficulty: 'easy' | 'medium' | 'hard';
+  readonly language: 'en' | 'zh';
 }
 
-const matchQueue: QueueEntry[] = [];
+const matchQueues = new Map<string, QueueEntry[]>();
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 5;
 const QUEUE_WAIT_TIME = 15_000; // 15s then start with whoever is in queue
 
-let matchTimer: ReturnType<typeof setTimeout> | null = null;
+const matchTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function getQueueKey(difficulty: string, language: string): string {
+  return `${difficulty}:${language}`;
+}
+
+function getQueue(key: string): QueueEntry[] {
+  if (!matchQueues.has(key)) {
+    matchQueues.set(key, []);
+  }
+  return matchQueues.get(key)!;
+}
 
 export function addToQueue(
   socketId: string,
+  deviceId: string | null,
   nickname: string,
   avatar: number,
+  difficulty: 'easy' | 'medium' | 'hard',
+  language: 'en' | 'zh',
   io: Server
 ): void {
-  // Prevent duplicates
-  if (matchQueue.some(e => e.socketId === socketId)) return;
+  const key = getQueueKey(difficulty, language);
+  const queue = getQueue(key);
 
-  matchQueue.push({ socketId, nickname, avatar, joinedAt: Date.now() });
+  // Prevent duplicates across all queues
+  for (const [, q] of matchQueues) {
+    if (q.some(e => e.socketId === socketId)) return;
+  }
 
-  io.to(socketId).emit('queue:joined', { position: matchQueue.length });
+  queue.push({ socketId, deviceId, nickname, avatar, joinedAt: Date.now(), difficulty, language });
+
+  io.to(socketId).emit('queue:joined', { position: queue.length });
   broadcastQueueSize(io);
 
-  if (matchQueue.length >= MAX_PLAYERS) {
-    createMatch(io);
-  } else if (matchQueue.length >= MIN_PLAYERS && !matchTimer) {
-    matchTimer = setTimeout(() => {
-      if (matchQueue.length >= MIN_PLAYERS) {
-        createMatch(io);
+  if (queue.length >= MAX_PLAYERS) {
+    createMatch(key, io);
+  } else if (queue.length >= MIN_PLAYERS && !matchTimers.has(key)) {
+    const timer = setTimeout(() => {
+      const q = getQueue(key);
+      if (q.length >= MIN_PLAYERS) {
+        createMatch(key, io);
       }
-      matchTimer = null;
+      matchTimers.delete(key);
     }, QUEUE_WAIT_TIME);
+    matchTimers.set(key, timer);
   }
 }
 
 export function removeFromQueue(socketId: string, io: Server): void {
-  const idx = matchQueue.findIndex(e => e.socketId === socketId);
-  if (idx !== -1) {
-    matchQueue.splice(idx, 1);
-    broadcastQueueSize(io);
-  }
+  for (const [key, queue] of matchQueues) {
+    const idx = queue.findIndex(e => e.socketId === socketId);
+    if (idx !== -1) {
+      queue.splice(idx, 1);
+      broadcastQueueSize(io);
 
-  if (matchQueue.length < MIN_PLAYERS && matchTimer) {
-    clearTimeout(matchTimer);
-    matchTimer = null;
+      if (queue.length < MIN_PLAYERS && matchTimers.has(key)) {
+        clearTimeout(matchTimers.get(key)!);
+        matchTimers.delete(key);
+      }
+      return;
+    }
   }
 }
 
-function createMatch(io: Server): void {
-  const playersToMatch = matchQueue.splice(0, MAX_PLAYERS);
-  if (matchTimer) {
-    clearTimeout(matchTimer);
-    matchTimer = null;
+function createMatch(queueKey: string, io: Server): void {
+  const queue = getQueue(queueKey);
+  const playersToMatch = queue.splice(0, MAX_PLAYERS);
+  if (matchTimers.has(queueKey)) {
+    clearTimeout(matchTimers.get(queueKey)!);
+    matchTimers.delete(queueKey);
   }
 
-  const room = createRoom(MAX_PLAYERS);
+  const first = playersToMatch[0];
+  const room = createRoom(MAX_PLAYERS, first.difficulty, first.language);
 
   for (const entry of playersToMatch) {
     const socket = io.sockets.sockets.get(entry.socketId);
     if (!socket) continue;
 
-    addPlayerToRoom(room, entry.socketId, entry.nickname, entry.avatar);
+    addPlayerToRoom(room, entry.socketId, entry.deviceId, entry.nickname, entry.avatar);
     socket.join(room.id);
     socket.data.roomId = room.id;
   }
@@ -94,9 +123,17 @@ function createMatch(io: Server): void {
 }
 
 function broadcastQueueSize(io: Server): void {
-  io.emit('queue:size', { size: matchQueue.length });
+  let totalSize = 0;
+  for (const [, queue] of matchQueues) {
+    totalSize += queue.length;
+  }
+  io.emit('queue:size', { size: totalSize });
 }
 
 export function getQueueSize(): number {
-  return matchQueue.length;
+  let totalSize = 0;
+  for (const [, queue] of matchQueues) {
+    totalSize += queue.length;
+  }
+  return totalSize;
 }

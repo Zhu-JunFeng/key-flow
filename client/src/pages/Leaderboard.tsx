@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Radio, Spin } from '@arco-design/web-react';
 import { getAvatar } from '../lib/avatars';
+import { useNow } from '../hooks/useElapsedTime';
+import { useLocale } from '../lib/hooks';
 import type { LeaderboardEntry } from '../types';
 
 export default function Leaderboard() {
+  const locale = useLocale();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [mode, setMode] = useState<'all' | 'practice' | 'multiplayer'>('all');
   const [loading, setLoading] = useState(true);
+  const now = useNow(true, 60_000);
 
   useEffect(() => {
-    setLoading(true);
     fetch(`/api/leaderboard${mode === 'all' ? '' : `?mode=${mode}`}`)
       .then(res => res.json())
       .then(data => { setEntries(data); setLoading(false); })
@@ -23,14 +26,14 @@ export default function Leaderboard() {
           <h1 className="text-3xl font-extrabold" style={{
             background: 'linear-gradient(135deg, #1e293b 0%, #6366f1 100%)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-          }}>排行榜</h1>
-          <p className="text-slate-700 text-sm mt-1">全球最快打字选手</p>
+          }}>{locale === 'zh' ? '排行榜' : 'Leaderboard'}</h1>
+          <p className="text-slate-700 text-sm mt-1">{locale === 'zh' ? '全球最快打字选手' : 'Fastest typists worldwide'}</p>
         </div>
-        <Radio.Group type="button" value={mode} onChange={v => setMode(v)}
+        <Radio.Group type="button" value={mode} onChange={v => { setLoading(true); setMode(v); }}
           options={[
-            { label: '全部', value: 'all' },
-            { label: '练习', value: 'practice' },
-            { label: '对战', value: 'multiplayer' },
+            { label: locale === 'zh' ? '全部' : 'All', value: 'all' },
+            { label: locale === 'zh' ? '练习' : 'Practice', value: 'practice' },
+            { label: locale === 'zh' ? '对战' : 'Battle', value: 'multiplayer' },
           ]} />
       </div>
 
@@ -41,7 +44,7 @@ export default function Leaderboard() {
       ) : entries.length === 0 ? (
         <div className="text-center py-20">
           <div className="text-5xl mb-4 opacity-60">🏆</div>
-          <p className="text-slate-600">还没有记录，成为第一个上榜的人吧！</p>
+          <p className="text-slate-600">{locale === 'zh' ? '还没有记录，成为第一个上榜的人吧！' : 'No records yet. Be the first on the board.'}</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -65,7 +68,7 @@ export default function Leaderboard() {
                     <div className="font-semibold text-slate-800 text-sm mb-2">{entry.nickname}</div>
                     <div className="text-2xl font-extrabold tabular-nums" style={{ color: rankOrder === 1 ? '#f59e0b' : rankOrder === 2 ? '#64748b' : '#b45309' }}>{Math.round(entry.wpm)}</div>
                     <div className="text-[10px] text-slate-600 uppercase tracking-wider">WPM</div>
-                    <div className="text-xs text-slate-600 mt-1">{Math.round(entry.accuracy)}% 准确率</div>
+                    <div className="text-xs text-slate-600 mt-1">{Math.round(entry.accuracy)}% {locale === 'zh' ? '准确率' : 'accuracy'}</div>
                   </div>
                 );
               })}
@@ -78,12 +81,12 @@ export default function Leaderboard() {
             {/* Desktop header */}
             <div className="hidden sm:grid grid-cols-[3rem_1fr_5rem_4rem_4rem_5rem] gap-2 px-5 py-3 text-[11px] text-slate-600 uppercase tracking-wider font-semibold"
               style={{ borderBottom: '1px solid var(--glass-border)', background: 'rgba(99,102,241,0.05)' }}>
-              <div>#</div><div>玩家</div><div className="text-right">速度</div><div className="text-right">准确率</div><div className="text-right">模式</div><div className="text-right">时间</div>
+              <div>#</div><div>{locale === 'zh' ? '玩家' : 'Player'}</div><div className="text-right">{locale === 'zh' ? '速度' : 'Speed'}</div><div className="text-right">{locale === 'zh' ? '准确率' : 'Accuracy'}</div><div className="text-right">{locale === 'zh' ? '模式' : 'Mode'}</div><div className="text-right">{locale === 'zh' ? '时间' : 'Time'}</div>
             </div>
             {/* Mobile header */}
             <div className="grid sm:hidden grid-cols-[2rem_1fr_4rem_3.5rem] gap-1.5 px-3 py-2.5 text-[10px] text-slate-600 uppercase tracking-wider font-semibold"
               style={{ borderBottom: '1px solid var(--glass-border)', background: 'rgba(99,102,241,0.05)' }}>
-              <div>#</div><div>玩家</div><div className="text-right">速度</div><div className="text-right">准确率</div>
+              <div>#</div><div>{locale === 'zh' ? '玩家' : 'Player'}</div><div className="text-right">{locale === 'zh' ? '速度' : 'Speed'}</div><div className="text-right">{locale === 'zh' ? '准确率' : 'Accuracy'}</div>
             </div>
             {entries.map((entry, index) => (
               <div key={entry.id}>
@@ -104,9 +107,9 @@ export default function Leaderboard() {
                     background: entry.mode === 'multiplayer' ? 'rgba(139,92,246,0.1)' : 'rgba(59,130,246,0.1)',
                     color: entry.mode === 'multiplayer' ? '#8b5cf6' : '#3b82f6',
                     border: `1px solid ${entry.mode === 'multiplayer' ? 'rgba(139,92,246,0.2)' : 'rgba(59,130,246,0.2)'}`,
-                  }}>{entry.mode === 'multiplayer' ? '对战' : '练习'}</span>
+                  }}>{entry.mode === 'multiplayer' ? (locale === 'zh' ? '对战' : 'Battle') : (locale === 'zh' ? '练习' : 'Practice')}</span>
                 </div>
-                <div className="text-right text-slate-600 text-xs">{formatTime(entry.createdAt)}</div>
+                <div className="text-right text-slate-600 text-xs">{formatTime(entry.createdAt, now, locale)}</div>
                 </div>
                 {/* Mobile row */}
                 <div className="grid sm:hidden grid-cols-[2rem_1fr_4rem_3.5rem] gap-1.5 items-center px-3 py-2.5"
@@ -128,15 +131,15 @@ export default function Leaderboard() {
   );
 }
 
-function formatTime(dateStr: string): string {
+function formatTime(dateStr: string, now: number, locale: 'zh' | 'en'): string {
   // SQLite CURRENT_TIMESTAMP stores UTC, append 'Z' to parse correctly
   const date = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
-  const diffMins = Math.floor((Date.now() - date.getTime()) / 60000);
-  if (diffMins < 1) return '刚刚';
-  if (diffMins < 60) return `${diffMins}分前`;
+  const diffMins = Math.floor((now - date.getTime()) / 60000);
+  if (diffMins < 1) return locale === 'zh' ? '刚刚' : 'Just now';
+  if (diffMins < 60) return locale === 'zh' ? `${diffMins}分前` : `${diffMins}m ago`;
   const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}时前`;
+  if (diffHours < 24) return locale === 'zh' ? `${diffHours}时前` : `${diffHours}h ago`;
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays}天前`;
-  return date.toLocaleDateString('zh-CN');
+  if (diffDays < 30) return locale === 'zh' ? `${diffDays}天前` : `${diffDays}d ago`;
+  return date.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US');
 }

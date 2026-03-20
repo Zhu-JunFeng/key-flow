@@ -17,8 +17,14 @@ export interface OAuthConfig {
   };
 }
 
+function getRedirectBase(): string {
+  const configuredBase = process.env.OAUTH_REDIRECT_BASE?.trim();
+  const renderBase = process.env.RENDER_EXTERNAL_URL?.trim();
+  return (configuredBase || renderBase || 'http://localhost:3001').replace(/\/+$/, '');
+}
+
 export function getOAuthConfig(): OAuthConfig {
-  const base = process.env.OAUTH_REDIRECT_BASE || 'http://localhost:3001';
+  const base = getRedirectBase();
   return {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID || '',

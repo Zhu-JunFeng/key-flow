@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Switch, Button } from '@arco-design/web-react';
 import { getLessonById } from '../lib/lessons';
 import { updateLessonProgress, calculateStars } from '../lib/progress';
+import { useElapsedTime } from '../hooks/useElapsedTime';
 import { useTyping } from '../hooks/useTyping';
 import { resumeAudioContext } from '../lib/sounds';
 import { reportSession } from '../lib/api';
@@ -59,8 +60,14 @@ export default function LessonPlay() {
 
   const { state: typingState, handleKeyDown, reset } = useTyping(text, onProgress);
 
-  useEffect(() => { reset(); setShowResult(false); setEncourageMsg(''); setXpEarned(0); }, [text, reset]);
-  useEffect(() => { if (typingState.isComplete) setShowResult(true); }, [typingState.isComplete]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      reset();
+      setShowResult(false);
+      setEncourageMsg('');
+      setXpEarned(0);
+    });
+  }, [text, reset]);
   useEffect(() => {
     if (typingState.isComplete && lesson && typingState.startTime && typingState.endTime) {
       updateLessonProgress(lessonId, typingState.wpm, typingState.accuracy, typingState.endTime - typingState.startTime);
@@ -79,6 +86,7 @@ export default function LessonPlay() {
     return () => window.removeEventListener('keydown', handler);
   }, [handleKeyDown, showResult, text, typingState.currentIndex]);
 
+  const timeElapsed = useElapsedTime(typingState.startTime, typingState.endTime);
   if (!lesson) {
     return (<div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
       <div className="text-lg" style={{ color: 'var(--text-muted)' }}>{locale === 'zh' ? '课程不存在' : 'Lesson not found'}</div>
@@ -88,7 +96,6 @@ export default function LessonPlay() {
 
   const activeKey = !typingState.isComplete ? text[typingState.currentIndex] : undefined;
   const stars = calculateStars(typingState.wpm, typingState.accuracy);
-  const timeElapsed = typingState.startTime ? (typingState.endTime ?? Date.now()) - typingState.startTime : undefined;
   const levelInfo = getLevelInfo(parseInt(localStorage.getItem('typerace_xp') || '0'));
 
   const resultEmoji = stars >= 5 ? '🌟' : stars >= 3 ? '🎉' : stars >= 1 ? '👍' : '💪';

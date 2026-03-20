@@ -11,10 +11,30 @@ import {
 } from './gameRoom.js';
 import { addLeaderboardEntry } from '../db/queries.js';
 
-// Track online users: deviceId -> socketId
-const onlineUsers = new Map<string, string>();
+// Track online users: deviceId -> active socketIds
+const onlineUsers = new Map<string, Set<string>>();
 // Track spectators: roomId -> Set<socketId>
 const spectators = new Map<string, Set<string>>();
+
+function sanitizeNickname(nickname: string | undefined): string | null {
+  if (!nickname) return null;
+  const trimmed = nickname.trim();
+  if (trimmed.length === 0) return null;
+  return trimmed.slice(0, 20);
+}
+
+function sanitizeAvatar(avatar: number | undefined): number {
+  return Math.max(0, Math.min(9, avatar ?? 0));
+}
+
+function getSocketDeviceId(socket: Socket, deviceId?: string): string | null {
+  const normalized = deviceId?.trim();
+  if (normalized) {
+    socket.data.deviceId = normalized;
+    return normalized;
+  }
+  return (socket.data.deviceId as string | undefined) ?? null;
+}
 
 export function setupSocketHandlers(io: Server): void {
   io.on('connection', (socket: Socket) => {
@@ -23,18 +43,28 @@ export function setupSocketHandlers(io: Server): void {
     // ===== Online presence =====
     socket.on('user:online', (data: { deviceId: string }) => {
       if (!data.deviceId) return;
-      onlineUsers.set(data.deviceId, socket.id);
-      socket.data.deviceId = data.deviceId;
-      // Notify friends that user is online
-      socket.broadcast.emit('friend:online', { deviceId: data.deviceId });
+      const deviceId = data.deviceId.trim();
+      if (!deviceId) return;
+
+      const existingSockets = onlineUsers.get(deviceId) ?? new Set<string>();
+      const wasOffline = existingSockets.size === 0;
+      existingSockets.add(socket.id);
+      onlineUsers.set(deviceId, existingSockets);
+      socket.data.deviceId = deviceId;
+
+      if (wasOffline) {
+        socket.broadcast.emit('friend:online', { deviceId });
+      }
     });
 
     // ===== Match Queue =====
-    socket.on('queue:join', (data: { nickname: string; avatar: number }) => {
-      if (!data.nickname || data.nickname.trim().length === 0) return;
-      const nickname = data.nickname.trim().slice(0, 20);
-      const avatar = Math.max(0, Math.min(9, data.avatar ?? 0));
-      addToQueue(socket.id, nickname, avatar, io);
+    socket.on('queue:join', (data: { deviceId?: string; nickname: string; avatar: number; difficulty?: string; language?: string }) => {
+      const nickname = sanitizeNickname(data.nickname);
+      if (!nickname) return;
+      const avatar = sanitizeAvatar(data.avatar);
+      const difficulty = (['easy', 'medium', 'hard'].includes(data.difficulty ?? '') ? data.difficulty : 'medium') as 'easy' | 'medium' | 'hard';
+      const language = (['en', 'zh'].includes(data.language ?? '') ? data.language : 'en') as 'en' | 'zh';
+      addToQueue(socket.id, getSocketDeviceId(socket, data.deviceId), nickname, avatar, difficulty, language, io);
     });
 
     socket.on('queue:leave', () => {
@@ -70,10 +100,12 @@ export function setupSocketHandlers(io: Server): void {
       accuracy: number;
       textLength: number;
     }) => {
-      if (!data.nickname || data.wpm <= 0) return;
+      const nickname = sanitizeNickname(data.nickname);
+      if (!nickname || data.wpm <= 0) return;
       addLeaderboardEntry({
-        nickname: data.nickname.trim().slice(0, 20),
-        avatar: Math.max(0, Math.min(9, data.avatar ?? 0)),
+        deviceId: getSocketDeviceId(socket),
+        nickname,
+        avatar: sanitizeAvatar(data.avatar),
         wpm: Math.round(data.wpm * 10) / 10,
         accuracy: Math.round(data.accuracy * 10) / 10,
         textLength: data.textLength,
@@ -111,18 +143,26 @@ export function setupSocketHandlers(io: Server): void {
     });
 
     // ===== Private Rooms =====
-    socket.on('room:create-private', (data: { nickname: string; avatar: number }) => {
-      if (!data.nickname) return;
-      const room = createRoom(5);
-      const nickname = data.nickname.trim().slice(0, 20);
-      const avatar = Math.max(0, Math.min(9, data.avatar ?? 0));
-      addPlayerToRoom(room, socket.id, nickname, avatar);
+    socket.on('room:create-private', (data: { deviceId?: string; nickname: string; avatar: number; difficulty?: string; language?: string }) => {
+      const nickname = sanitizeNickname(data.nickname);
+      if (!nickname) return;
+      const difficulty = (['easy', 'medium', 'hard'].includes(data.difficulty ?? '') ? data.difficulty : 'medium') as 'easy' | 'medium' | 'hard';
+      const language = (['en', 'zh'].includes(data.language ?? '') ? data.language : 'en') as 'en' | 'zh';
+      const room = createRoom(5, difficulty, language);
+      const avatar = sanitizeAvatar(data.avatar);
+      addPlayerToRoom(room, socket.id, getSocketDeviceId(socket, data.deviceId), nickname, avatar);
       socket.join(room.id);
       socket.data.roomId = room.id;
-      socket.emit('room:created', { roomId: room.id, text: room.text });
+      socket.emit('room:created', {
+        roomId: room.id,
+        text: room.text,
+        players: room.players.map(p => ({ id: p.id, nickname: p.nickname, avatar: p.avatar })),
+        difficulty,
+        language,
+      });
     });
 
-    socket.on('room:join-private', (data: { roomId: string; nickname: string; avatar: number }) => {
+    socket.on('room:join-private', (data: { roomId: string; deviceId?: string; nickname: string; avatar: number }) => {
       const room = getRoom(data.roomId);
       if (!room) {
         socket.emit('room:error', { message: 'Room not found' });
@@ -136,9 +176,9 @@ export function setupSocketHandlers(io: Server): void {
         socket.emit('room:error', { message: 'Room is full' });
         return;
       }
-      const nickname = (data.nickname ?? 'Guest').trim().slice(0, 20);
-      const avatar = Math.max(0, Math.min(9, data.avatar ?? 0));
-      addPlayerToRoom(room, socket.id, nickname, avatar);
+      const nickname = sanitizeNickname(data.nickname) ?? 'Guest';
+      const avatar = sanitizeAvatar(data.avatar);
+      addPlayerToRoom(room, socket.id, getSocketDeviceId(socket, data.deviceId), nickname, avatar);
       socket.join(room.id);
       socket.data.roomId = room.id;
       io.to(room.id).emit('room:player-joined', {
@@ -167,8 +207,14 @@ export function setupSocketHandlers(io: Server): void {
       // Clean up online presence
       const deviceId = socket.data.deviceId as string | undefined;
       if (deviceId) {
-        onlineUsers.delete(deviceId);
-        socket.broadcast.emit('friend:offline', { deviceId });
+        const activeSockets = onlineUsers.get(deviceId);
+        if (activeSockets) {
+          activeSockets.delete(socket.id);
+          if (activeSockets.size === 0) {
+            onlineUsers.delete(deviceId);
+            socket.broadcast.emit('friend:offline', { deviceId });
+          }
+        }
       }
 
       // Clean up spectating
@@ -191,9 +237,9 @@ export function setupSocketHandlers(io: Server): void {
 }
 
 export function isUserOnline(deviceId: string): boolean {
-  return onlineUsers.has(deviceId);
+  return (onlineUsers.get(deviceId)?.size ?? 0) > 0;
 }
 
-export function getOnlineUsers(): ReadonlyMap<string, string> {
+export function getOnlineUsers(): ReadonlyMap<string, ReadonlySet<string>> {
   return onlineUsers;
 }

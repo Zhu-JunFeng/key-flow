@@ -3,6 +3,8 @@ import { Button } from '@arco-design/web-react';
 import { getRandomWords } from '../../lib/gameWords';
 import { useLocale } from '../../lib/hooks';
 import { playKeySound, playErrorSound, playCompleteSound } from '../../lib/sounds';
+import { submitGameScore } from '../../lib/api';
+import GameLeaderboard from './GameLeaderboard';
 
 interface Props {
   readonly onBack: () => void;
@@ -20,6 +22,7 @@ export default function BlindTyping({ onBack }: Props) {
   const [, setStartTime] = useState<number | null>(null);
   const [typedHistory, setTypedHistory] = useState<readonly { word: string; typed: string; correct: boolean }[]>([]);
   const [currentTyped, setCurrentTyped] = useState('');
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
 
   const correctRef = useRef(0);
   const errorRef = useRef(0);
@@ -27,7 +30,7 @@ export default function BlindTyping({ onBack }: Props) {
   const totalWords = 10;
 
   const startGame = useCallback(() => {
-    const newWords = getRandomWords(totalWords, 'medium');
+    const newWords = getRandomWords(totalWords, difficulty);
     setWords(newWords);
     setCurrentWordIdx(0);
     setTypedChars(0);
@@ -39,7 +42,7 @@ export default function BlindTyping({ onBack }: Props) {
     setCurrentTyped('');
     setGameState('playing');
     gameStateRef.current = 'playing';
-  }, []);
+  }, [difficulty]);
 
   const revealResults = useCallback(() => {
     setGameState('reveal');
@@ -49,7 +52,8 @@ export default function BlindTyping({ onBack }: Props) {
     const xp = correctRef.current * 3;
     const currentXp = parseInt(localStorage.getItem('typerace_xp') || '0');
     localStorage.setItem('typerace_xp', String(currentXp + xp));
-  }, []);
+    submitGameScore({ gameId: 'blind', score: correctRef.current * 3, difficulty }).catch(() => {});
+  }, [difficulty]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (gameStateRef.current !== 'playing') return;
@@ -117,6 +121,19 @@ export default function BlindTyping({ onBack }: Props) {
           <p style={{ color: 'var(--text-secondary)' }}>
             {locale === 'zh' ? '你能看到目标单词，但看不到你输入的内容！凭手感和记忆打出10个单词。' : 'You can see the target word but NOT what you type! Type 10 words by feel and memory.'}
           </p>
+          <div className="flex justify-center gap-2">
+            {(['easy', 'medium', 'hard'] as const).map(d => (
+              <button key={d} onClick={() => setDifficulty(d)}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                style={{
+                  background: difficulty === d ? 'rgba(99,102,241,0.15)' : 'var(--bg-card)',
+                  color: difficulty === d ? 'var(--primary-color)' : 'var(--text-secondary)',
+                  border: `1px solid ${difficulty === d ? 'var(--primary-color)' : 'var(--glass-border)'}`,
+                }}>
+                {d === 'easy' ? (locale === 'zh' ? '简单' : 'Easy') : d === 'medium' ? (locale === 'zh' ? '中等' : 'Medium') : (locale === 'zh' ? '困难' : 'Hard')}
+              </button>
+            ))}
+          </div>
           <Button type="primary" size="large" onClick={startGame}>
             {locale === 'zh' ? '开始挑战' : 'Start Challenge'}
           </Button>
@@ -205,6 +222,7 @@ export default function BlindTyping({ onBack }: Props) {
             <Button type="primary" size="large" onClick={startGame}>{locale === 'zh' ? '再来一局' : 'Play Again'}</Button>
             <Button size="large" onClick={onBack}>{locale === 'zh' ? '返回' : 'Back'}</Button>
           </div>
+          <GameLeaderboard gameId="blind" currentScore={correctTotal * 3} />
         </div>
       )}
     </div>

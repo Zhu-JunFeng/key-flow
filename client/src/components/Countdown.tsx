@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { playCountdownSound, playGoSound } from '../lib/sounds';
+import { t } from '../lib/i18n';
+import { useLocale } from '../lib/hooks';
 
 interface CountdownProps {
   readonly countdownEnd: number;
@@ -8,6 +10,7 @@ interface CountdownProps {
 
 export default function Countdown({ countdownEnd, onComplete }: CountdownProps) {
   const [count, setCount] = useState<number>(0);
+  const locale = useLocale();
 
   useEffect(() => {
     const updateCount = () => {
@@ -36,18 +39,28 @@ export default function Countdown({ countdownEnd, onComplete }: CountdownProps) 
   if (count === 0) return null;
 
   return (
-    <div className="fixed inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="fixed inset-0 flex items-center justify-center z-50" style={{
+      background: 'var(--glass-bg)',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+    }}>
       <div className="text-center">
         <div className="relative inline-flex items-center justify-center">
-          <div className="absolute w-44 h-44 rounded-full border-2 border-indigo-200 animate-ping" />
-          <div className="absolute w-36 h-36 rounded-full border border-indigo-100" />
-          <div className="relative w-28 h-28 rounded-full bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 flex items-center justify-center shadow-xl shadow-indigo-100">
-            <span className="text-6xl font-extrabold text-indigo-500 tabular-nums">
+          <div className="absolute w-44 h-44 rounded-full border-2 animate-ping" style={{ borderColor: 'var(--primary-color)', opacity: 0.2 }} />
+          <div className="absolute w-36 h-36 rounded-full border" style={{ borderColor: 'var(--glass-border)' }} />
+          <div className="relative w-28 h-28 rounded-full flex items-center justify-center" style={{
+            background: 'var(--glass-bg)',
+            border: '1px solid var(--glass-border)',
+            boxShadow: 'var(--glass-shadow)',
+          }}>
+            <span className="text-6xl font-extrabold tabular-nums" style={{ color: 'var(--primary-color)' }}>
               {count}
             </span>
           </div>
         </div>
-        <div className="text-lg text-slate-600 mt-6 font-medium">准备开始...</div>
+        <div className="text-lg mt-6 font-medium" style={{ color: 'var(--text-secondary)' }}>
+          {t('countdown.ready', locale)}
+        </div>
       </div>
     </div>
   );

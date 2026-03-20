@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import cors from 'cors';
+import cors, { type CorsOptions } from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { setupSocketHandlers, getOnlineUsers } from './socket/handlers.js';
@@ -11,12 +11,13 @@ import {
   getLeaderboard, getPlayerStats, getPlayerHistory,
   getOrCreateProfile, updateProfile, addLeaderboardEntry,
   upsertDailyStats, getDailyStats, upsertKeyErrorStats, getKeyErrorStats,
-  createCustomText, getCustomTexts, deleteCustomText,
+  createCustomText, getCustomTexts, deleteCustomText, updateCustomText, markCustomTextUsed,
   getOrCreateDailyChallenge, submitDailyChallengeScore, getDailyChallengeLeaderboard,
   findProfileByFriendsCode, addFriend, acceptFriend, removeFriend, getFriends, getPendingFriendRequests,
-  saveReplay, getReplay, getMyReplays,
+  saveReplay, getReplay, getMyReplays, getReplayAnalysis,
   incrementLessonPracticeCount, getAllLessonPracticeCounts,
-  getUserCount,
+  getUserCount, getAdaptiveRecommendations, getDashboardInsights, getSeasonOverview, getGrowthOverview,
+  submitGameScore, getGameLeaderboard, getGameMeta,
 } from './db/queries.js';
 import { passages, getRandomPassage } from './texts/passages.js';
 import { CODE_TEXTS, getCodeTexts } from './texts/codeTexts.js';
@@ -29,18 +30,40 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 const isProduction = process.env.NODE_ENV === 'production';
+const normalizeOrigin = (value: string) => value.replace(/\/+$/, '');
+const renderExternalUrl = process.env.RENDER_EXTERNAL_URL?.trim();
+const renderOrigin = renderExternalUrl ? normalizeOrigin(renderExternalUrl) : '';
+const configuredOrigins = (process.env.APP_ORIGIN ?? renderOrigin)
+  .split(',')
+  .map(origin => normalizeOrigin(origin.trim()))
+  .filter(Boolean);
+const allowedOrigins = configuredOrigins.length > 0
+  ? configuredOrigins
+  : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'];
+
+const corsOptions: CorsOptions = {
+  origin(origin, callback) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    if (!isProduction || allowedOrigins.includes(normalizeOrigin(origin))) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('Origin not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+};
 
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: isProduction ? false : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
-    methods: ['GET', 'POST'],
-  },
+  cors: corsOptions,
 });
 
-app.use(cors());
-app.use(express.json());
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '1mb' }));
 
 // Initialize database
 getDb();
@@ -131,6 +154,16 @@ app.get('/api/stats/:deviceId/keys', (req, res) => {
   res.json(stats);
 });
 
+app.get('/api/stats/:deviceId/insights', (req, res) => {
+  const insights = getDashboardInsights(req.params.deviceId);
+  res.json(insights);
+});
+
+app.get('/api/training/:deviceId/recommendations', (req, res) => {
+  const recommendations = getAdaptiveRecommendations(req.params.deviceId);
+  res.json(recommendations);
+});
+
 app.post('/api/stats/:deviceId/session', (req, res) => {
   const { chars, wpm, accuracy, timeMs, keyStats } = req.body;
   if (chars === undefined || wpm === undefined) {
@@ -151,13 +184,37 @@ app.get('/api/custom-texts/:deviceId', (req, res) => {
 });
 
 app.post('/api/custom-texts/:deviceId', (req, res) => {
-  const { title, content, language } = req.body;
+  const { title, content, language, collectionName, tags, isFavorite } = req.body;
   if (!title || !content) {
     res.status(400).json({ error: 'Missing title or content' });
     return;
   }
-  const id = createCustomText(req.params.deviceId, { title, content: content.slice(0, 5000), language });
+  const id = createCustomText(req.params.deviceId, {
+    title,
+    content: content.slice(0, 5000),
+    language,
+    collectionName,
+    tags: Array.isArray(tags) ? tags.slice(0, 8) : undefined,
+    isFavorite: Boolean(isFavorite),
+  });
   res.json({ id });
+});
+
+app.put('/api/custom-texts/:deviceId/:textId', (req, res) => {
+  const ok = updateCustomText(req.params.deviceId, parseInt(req.params.textId), {
+    title: req.body.title,
+    content: typeof req.body.content === 'string' ? req.body.content.slice(0, 5000) : undefined,
+    language: req.body.language,
+    collectionName: req.body.collectionName,
+    tags: Array.isArray(req.body.tags) ? req.body.tags.slice(0, 8) : undefined,
+    isFavorite: typeof req.body.isFavorite === 'boolean' ? req.body.isFavorite : undefined,
+  });
+  res.json({ success: ok });
+});
+
+app.post('/api/custom-texts/:deviceId/:textId/use', (req, res) => {
+  const ok = markCustomTextUsed(req.params.deviceId, parseInt(req.params.textId));
+  res.json({ success: ok });
 });
 
 app.delete('/api/custom-texts/:deviceId/:textId', (req, res) => {
@@ -262,6 +319,15 @@ app.get('/api/replays/view/:replayId', (req, res) => {
   res.json(replay);
 });
 
+app.get('/api/replays/view/:replayId/analysis', (req, res) => {
+  const analysis = getReplayAnalysis(parseInt(req.params.replayId));
+  if (!analysis) {
+    res.status(404).json({ error: 'Replay not found' });
+    return;
+  }
+  res.json(analysis);
+});
+
 app.post('/api/replays', (req, res) => {
   const { deviceId, nickname, textContent, replayData, wpm, accuracy, durationMs } = req.body;
   if (!deviceId || !textContent || !replayData) {
@@ -285,6 +351,46 @@ app.get('/api/texts/code', (req, res) => {
   const language = req.query.language as string | undefined;
   const texts = getCodeTexts(language);
   res.json(texts);
+});
+
+// ===== Game Scores API =====
+app.post('/api/game-scores', (req, res) => {
+  const { deviceId: did, gameId, score, difficulty } = req.body;
+  if (!did || !gameId || score == null) {
+    res.status(400).json({ error: 'Missing fields' });
+    return;
+  }
+  const nickname = req.body.nickname ?? 'Anonymous';
+  const avatar = req.body.avatar ?? 0;
+  const id = submitGameScore({ deviceId: did, nickname, avatar, gameId, score, difficulty: difficulty ?? 'medium' });
+  res.json({ id });
+});
+
+app.get('/api/game-scores/:gameId', (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+  const scores = getGameLeaderboard(req.params.gameId, limit);
+  res.json(scores);
+});
+
+app.get('/api/games/meta/:deviceId', (req, res) => {
+  const meta = getGameMeta(req.params.deviceId);
+  res.json(meta);
+});
+
+app.get('/api/season/leaderboard', (req, res) => {
+  const fallbackDevice = typeof req.query.deviceId === 'string' ? req.query.deviceId : '';
+  const season = getSeasonOverview(fallbackDevice);
+  res.json(season.leaderboard);
+});
+
+app.get('/api/season/:deviceId', (req, res) => {
+  const season = getSeasonOverview(req.params.deviceId);
+  res.json(season);
+});
+
+app.get('/api/growth/:deviceId', (req, res) => {
+  const growth = getGrowthOverview(req.params.deviceId);
+  res.json(growth);
 });
 
 // ===== Online Count API =====

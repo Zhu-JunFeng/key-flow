@@ -1,0 +1,30 @@
+# Render Blueprints only support GitHub, GitLab, and Bitbucket repos.
+# Mirror this repo from Gitee before creating the Blueprint.
+previews:
+  generation: off
+
+services:
+  - type: web
+    name: keyflow
+    runtime: node
+    plan: starter
+    region: singapore
+    buildCommand: npm ci && npm --prefix client ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/online-count
+    autoDeployTrigger: commit
+    disk:
+      name: data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false

@@ -4,13 +4,18 @@ import { Link } from 'react-router-dom';
 import TypingArea from '../components/TypingArea';
 import VirtualKeyboard from '../components/VirtualKeyboard';
 import Stats from '../components/Stats';
+import { useElapsedTime } from '../hooks/useElapsedTime';
 import { useTyping } from '../hooks/useTyping';
 import { resumeAudioContext } from '../lib/sounds';
 import { submitScore } from '../lib/device';
-import { fetchCustomTexts, createCustomText, deleteCustomText, reportSession } from '../lib/api';
+import {
+  fetchCustomTexts, createCustomText, deleteCustomText, markCustomTextUsed,
+  reportSession, fetchTrainingRecommendations, updateCustomText, type CustomTextEntry, type TrainingRecommendations,
+} from '../lib/api';
 import { saveReplay } from '../lib/api';
 import { t, getEncouragement, calculateXp, getLevelInfo } from '../lib/i18n';
 import { useLocale } from '../lib/hooks';
+import { getStoredAvatar, getStoredNickname, setStoredNickname } from '../lib/userPrefs';
 import type { TextPassage } from '../types';
 
 const LANGUAGE_OPTIONS = [
@@ -26,7 +31,7 @@ export default function Practice() {
   const [text, setText] = useState<TextPassage | null>(null);
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [language, setLanguage] = useState<'en' | 'zh'>(() => (localStorage.getItem('typingLanguage') as 'en' | 'zh') || 'en');
-  const [nickname, setNickname] = useState(() => localStorage.getItem('nickname') || '');
+  const [nickname, setNickname] = useState(() => getStoredNickname());
   const [showNicknameInput, setShowNicknameInput] = useState(false);
   const [showKeyboard, setShowKeyboard] = useState(() => localStorage.getItem('showKeyboard') !== 'false');
   const [lastPressedKey, setLastPressedKey] = useState<string | undefined>();
@@ -35,12 +40,17 @@ export default function Practice() {
   const [maxCombo, setMaxCombo] = useState(0);
   const [xpEarned, setXpEarned] = useState(0);
   const [encourageMsg, setEncourageMsg] = useState('');
+  const [coach, setCoach] = useState<TrainingRecommendations | null>(null);
 
   // Custom text state
-  const [customTexts, setCustomTexts] = useState<readonly { id: number; title: string; content: string }[]>([]);
+  const [customTexts, setCustomTexts] = useState<readonly CustomTextEntry[]>([]);
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
-  const [selectedCustom, setSelectedCustom] = useState<{ title: string; content: string } | null>(null);
+  const [newCollection, setNewCollection] = useState('My Library');
+  const [newTags, setNewTags] = useState('');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [collectionFilter, setCollectionFilter] = useState('all');
+  const [selectedCustom, setSelectedCustom] = useState<{ id: number; title: string; content: string } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const prevBestWpm = useRef(parseInt(localStorage.getItem('typerace_best_wpm') || '0'));
@@ -52,14 +62,30 @@ export default function Practice() {
   }, []);
 
   useEffect(() => {
-    if (tab === 'random') fetchText(difficulty, language);
+    if (tab !== 'random') return;
+    void (async () => {
+      const res = await fetch(`/api/texts/random?difficulty=${difficulty}&language=${language}`);
+      const data = await res.json();
+      setText(data);
+    })();
   }, [difficulty, language, fetchText, tab]);
 
   useEffect(() => {
+    fetchTrainingRecommendations().then(setCoach).catch(() => {});
+  }, []);
+
+  const reloadCustomTexts = useCallback(async () => {
+    const texts = await fetchCustomTexts();
+    setCustomTexts(texts);
+  }, []);
+
+  useEffect(() => {
     if (tab === 'custom') {
-      fetchCustomTexts().then(setCustomTexts);
+      queueMicrotask(() => {
+        void reloadCustomTexts();
+      });
     }
-  }, [tab]);
+  }, [reloadCustomTexts, tab]);
 
   const practiceText = tab === 'custom' && selectedCustom
     ? selectedCustom.content
@@ -68,7 +94,7 @@ export default function Practice() {
   const onProgress = useCallback((state: { isComplete: boolean; wpm: number; accuracy: number; startTime: number | null; endTime: number | null }) => {
     if (state.isComplete && practiceText && nickname) {
       const timeMs = state.startTime && state.endTime ? state.endTime - state.startTime : 0;
-      submitScore({ nickname, avatar: parseInt(localStorage.getItem('avatar') || '0'), wpm: state.wpm, accuracy: state.accuracy, textLength: practiceText.length, mode: 'practice', language });
+      submitScore({ nickname, avatar: getStoredAvatar(), wpm: state.wpm, accuracy: state.accuracy, textLength: practiceText.length, mode: 'practice', language });
       reportSession({ chars: practiceText.length, wpm: state.wpm, accuracy: state.accuracy, timeMs });
 
       // Calculate and store XP
@@ -91,7 +117,15 @@ export default function Practice() {
   }, [practiceText, nickname, language, maxCombo, locale]);
 
   const { state, handleKeyDown, reset, getReplayData } = useTyping(practiceText, onProgress);
-  useEffect(() => { reset(); setCombo(0); setMaxCombo(0); setXpEarned(0); setEncourageMsg(''); }, [text, selectedCustom, reset]);
+  useEffect(() => {
+    queueMicrotask(() => {
+      reset();
+      setCombo(0);
+      setMaxCombo(0);
+      setXpEarned(0);
+      setEncourageMsg('');
+    });
+  }, [text, selectedCustom, reset]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -120,7 +154,7 @@ export default function Practice() {
   }, [handleKeyDown, practiceText, state.currentIndex]);
 
   const handleNewText = () => { fetchText(difficulty, language); };
-  const handleSaveNickname = () => { if (nickname.trim()) { localStorage.setItem('nickname', nickname.trim()); setShowNicknameInput(false); } };
+  const handleSaveNickname = () => { if (nickname.trim()) { setStoredNickname(nickname.trim()); setShowNicknameInput(false); } };
 
   const handleSaveReplay = async () => {
     const replayData = getReplayData();
@@ -141,24 +175,47 @@ export default function Practice() {
       Message.warning(t('practice.inputWarning', locale));
       return;
     }
-    await createCustomText({ title: newTitle.trim(), content: newContent.trim() });
+    await createCustomText({
+      title: newTitle.trim(),
+      content: newContent.trim(),
+      collectionName: newCollection.trim() || 'My Library',
+      tags: newTags.split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 8),
+    });
     setNewTitle('');
     setNewContent('');
-    const texts = await fetchCustomTexts();
-    setCustomTexts(texts);
+    setNewTags('');
+    await reloadCustomTexts();
     Message.success(t('practice.customAdded', locale));
   };
 
   const handleDeleteCustomText = async (id: number) => {
     await deleteCustomText(id);
-    const texts = await fetchCustomTexts();
-    setCustomTexts(texts);
+    await reloadCustomTexts();
     if (selectedCustom) setSelectedCustom(null);
   };
 
-  const timeElapsed = state.startTime ? (state.endTime ?? Date.now()) - state.startTime : undefined;
+  const handleSelectCustomText = async (customText: CustomTextEntry) => {
+    setSelectedCustom({ id: customText.id, title: customText.title, content: customText.content });
+    void markCustomTextUsed(customText.id);
+    if (customText.collectionName !== collectionFilter && collectionFilter !== 'all') {
+      setCollectionFilter('all');
+    }
+  };
+
+  const handleToggleFavorite = async (customText: CustomTextEntry) => {
+    await updateCustomText(customText.id, { isFavorite: !customText.isFavorite });
+    await reloadCustomTexts();
+  };
+
+  const timeElapsed = useElapsedTime(state.startTime, state.endTime);
   const totalXp = parseInt(localStorage.getItem('typerace_xp') || '0');
   const levelInfo = getLevelInfo(totalXp);
+  const collections = Array.from(new Set(customTexts.map(textEntry => textEntry.collectionName))).sort();
+  const filteredCustomTexts = customTexts.filter(textEntry => {
+    if (showFavoritesOnly && !textEntry.isFavorite) return false;
+    if (collectionFilter !== 'all' && textEntry.collectionName !== collectionFilter) return false;
+    return true;
+  });
 
   if (tab === 'random' && !text) {
     return <div className="flex items-center justify-center min-h-[50vh]"><Spin size={32} /></div>;
@@ -257,6 +314,36 @@ export default function Practice() {
         </Link>
       </div>
 
+      {coach && (
+        <div className="glass-card p-4 mb-6" style={{ cursor: 'default' }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+                {locale === 'zh' ? '今日训练处方' : 'Today Coach Plan'}
+              </h3>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                {locale === 'zh'
+                  ? `建议从 ${formatModeLabel(coach.recommendedMode, locale)} 开始，目标 ${coach.targetWpm} WPM / ${coach.targetAccuracy}%`
+                  : `Start with ${coach.recommendedMode}, target ${coach.targetWpm} WPM / ${coach.targetAccuracy}%`}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {coach.focusKeys.slice(0, 4).map(key => (
+                <span key={key} className="px-2.5 py-1 rounded-full text-xs font-semibold" style={{
+                  background: 'rgba(239,68,68,0.12)',
+                  color: '#ef4444',
+                  border: '1px solid rgba(239,68,68,0.24)',
+                }}>
+                  {key}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Custom text management */}
       {tab === 'custom' && !selectedCustom && (
         <div className="space-y-4 mb-6">
@@ -267,6 +354,12 @@ export default function Practice() {
             <div className="space-y-2">
               <Input value={newTitle} onChange={v => setNewTitle(v)} placeholder={t('practice.titlePlaceholder', locale)} size="small"
                 onKeyDown={e => e.stopPropagation()} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Input value={newCollection} onChange={v => setNewCollection(v)} placeholder={locale === 'zh' ? '分组，如 面试 / 常用 / 代码' : 'Collection'} size="small"
+                  onKeyDown={e => e.stopPropagation()} />
+                <Input value={newTags} onChange={v => setNewTags(v)} placeholder={locale === 'zh' ? '标签，逗号分隔' : 'Tags, comma separated'} size="small"
+                  onKeyDown={e => e.stopPropagation()} />
+              </div>
               <Input.TextArea value={newContent} onChange={v => setNewContent(v)} placeholder={t('practice.contentPlaceholder', locale)} autoSize={{ minRows: 3, maxRows: 6 }}
                 onKeyDown={e => e.stopPropagation()} />
               <Button type="primary" size="small" onClick={handleAddCustomText}>{t('practice.add', locale)}</Button>
@@ -274,16 +367,60 @@ export default function Practice() {
           </div>
 
           {customTexts.length > 0 && (
+            <div className="glass-card p-4" style={{ cursor: 'default' }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <Button size="small" type={collectionFilter === 'all' ? 'primary' : 'secondary'} onClick={() => setCollectionFilter('all')}>
+                  {locale === 'zh' ? '全部分组' : 'All Collections'}
+                </Button>
+                {collections.map(collection => (
+                  <Button key={collection} size="small" type={collectionFilter === collection ? 'primary' : 'secondary'} onClick={() => setCollectionFilter(collection)}>
+                    {collection}
+                  </Button>
+                ))}
+                <Button size="small" type={showFavoritesOnly ? 'primary' : 'secondary'} onClick={() => setShowFavoritesOnly(value => !value)}>
+                  {locale === 'zh' ? '仅收藏' : 'Favorites'}
+                </Button>
+              </div>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                {locale === 'zh'
+                  ? `当前文本库 ${customTexts.length} 篇，筛选后 ${filteredCustomTexts.length} 篇`
+                  : `${customTexts.length} texts in library, ${filteredCustomTexts.length} shown`}
+              </p>
+            </div>
+          )}
+
+          {filteredCustomTexts.length > 0 && (
             <div className="space-y-2">
-              {customTexts.map(ct => (
+              {filteredCustomTexts.map(ct => (
                 <div key={ct.id} className="glass-card p-4 flex items-center justify-between"
                   style={{ cursor: 'pointer' }}
-                  onClick={() => setSelectedCustom({ title: ct.title, content: ct.content })}>
+                  onClick={() => handleSelectCustomText(ct)}>
                   <div>
-                    <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{ct.title}</p>
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{ct.title}</p>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.12)', color: 'var(--primary-color)' }}>{ct.collectionName}</span>
+                      {ct.isFavorite && <span className="text-[10px]" style={{ color: '#f59e0b' }}>★</span>}
+                    </div>
                     <p className="text-xs truncate" style={{ color: 'var(--text-muted)', maxWidth: '400px' }}>{ct.content.slice(0, 80)}...</p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {ct.tags.map(tag => (
+                        <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}>
+                          #{tag}
+                        </span>
+                      ))}
+                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        {locale === 'zh' ? `使用 ${ct.useCount} 次` : `${ct.useCount} uses`}
+                      </span>
+                    </div>
                   </div>
-                  <Button size="small" status="danger" onClick={e => { e.stopPropagation(); handleDeleteCustomText(ct.id); }}>{t('practice.delete', locale)}</Button>
+                  <div className="flex items-center gap-2">
+                    <Button size="small" onClick={e => { e.stopPropagation(); void handleToggleFavorite(ct); }}>
+                      {ct.isFavorite ? (locale === 'zh' ? '取消收藏' : 'Unfavorite') : (locale === 'zh' ? '收藏' : 'Favorite')}
+                    </Button>
+                    <Button size="small" status="danger" onClick={e => { e.stopPropagation(); void handleDeleteCustomText(ct.id); }}>{t('practice.delete', locale)}</Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -359,4 +496,15 @@ export default function Practice() {
       )}
     </div>
   );
+}
+
+function formatModeLabel(mode: TrainingRecommendations['recommendedMode'], locale: 'zh' | 'en'): string {
+  if (locale === 'en') return mode;
+  switch (mode) {
+    case 'lessons': return '课程';
+    case 'code': return '代码模式';
+    case 'multiplayer': return '多人竞速';
+    case 'daily': return '每日挑战';
+    default: return '自由练习';
+  }
 }

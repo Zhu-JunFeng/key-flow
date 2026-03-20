@@ -3,6 +3,8 @@ import { Button } from '@arco-design/web-react';
 import { getRandomWords } from '../../lib/gameWords';
 import { useLocale } from '../../lib/hooks';
 import { playKeySound, playErrorSound, playCompleteSound } from '../../lib/sounds';
+import { submitGameScore } from '../../lib/api';
+import GameLeaderboard from './GameLeaderboard';
 
 interface Props {
   readonly onBack: () => void;
@@ -40,13 +42,14 @@ export default function BossBattle({ onBack }: Props) {
   const [critHit, setCritHit] = useState(false);
   const [shakeScreen, setShakeScreen] = useState(false);
   const [damagePopup, setDamagePopup] = useState<{ value: number; crit: boolean } | null>(null);
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const inputRef = useRef<HTMLInputElement>(null);
   const bossAttackTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const boss = BOSSES[bossIdx];
 
   const startGame = useCallback(() => {
-    const newWords = getRandomWords(50, 'medium');
+    const newWords = getRandomWords(50, difficulty);
     setWords(newWords);
     setCurrentWordIdx(0);
     setInput('');
@@ -59,7 +62,7 @@ export default function BossBattle({ onBack }: Props) {
     setGameState('playing');
     setCritHit(false);
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, []);
+  }, [difficulty]);
 
   // Boss attacks player periodically
   useEffect(() => {
@@ -123,6 +126,7 @@ export default function BossBattle({ onBack }: Props) {
             const xp = Math.round(totalDamage / 5) + maxCombo * 2;
             const currentXp = parseInt(localStorage.getItem('typerace_xp') || '0');
             localStorage.setItem('typerace_xp', String(currentXp + xp));
+            submitGameScore({ gameId: 'boss', score: Math.round(totalDamage), difficulty }).catch(() => {});
             return 0;
           }
           // Next boss
@@ -137,7 +141,7 @@ export default function BossBattle({ onBack }: Props) {
       setCurrentWordIdx(prev => {
         const next = prev + 1;
         if (next >= words.length) {
-          const moreWords = getRandomWords(50, 'medium');
+          const moreWords = getRandomWords(50, difficulty);
           setWords(w => [...w, ...moreWords]);
         }
         return next;
@@ -165,6 +169,19 @@ export default function BossBattle({ onBack }: Props) {
               ? '打字攻击BOSS！连击越多伤害越高，准确率决定暴击率。击败5个BOSS赢得胜利！'
               : 'Type words to attack the Boss! Higher combo = more damage. Accuracy determines crit rate. Defeat 5 bosses to win!'}
           </p>
+          <div className="flex justify-center gap-2">
+            {(['easy', 'medium', 'hard'] as const).map(d => (
+              <button key={d} onClick={() => setDifficulty(d)}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                style={{
+                  background: difficulty === d ? 'rgba(99,102,241,0.15)' : 'var(--bg-card)',
+                  color: difficulty === d ? 'var(--primary-color)' : 'var(--text-secondary)',
+                  border: `1px solid ${difficulty === d ? 'var(--primary-color)' : 'var(--glass-border)'}`,
+                }}>
+                {d === 'easy' ? (locale === 'zh' ? '简单' : 'Easy') : d === 'medium' ? (locale === 'zh' ? '中等' : 'Medium') : (locale === 'zh' ? '困难' : 'Hard')}
+              </button>
+            ))}
+          </div>
           <Button type="primary" size="large" onClick={startGame}>
             {locale === 'zh' ? '开始战斗' : 'Start Battle'}
           </Button>
@@ -304,6 +321,7 @@ export default function BossBattle({ onBack }: Props) {
             <Button type="primary" size="large" onClick={startGame}>{locale === 'zh' ? '再来一局' : 'Play Again'}</Button>
             <Button size="large" onClick={onBack}>{locale === 'zh' ? '返回' : 'Back'}</Button>
           </div>
+          <GameLeaderboard gameId="boss" currentScore={Math.round(totalDamage)} />
         </div>
       )}
 
@@ -332,6 +350,7 @@ export default function BossBattle({ onBack }: Props) {
             <Button type="primary" size="large" onClick={startGame}>{locale === 'zh' ? '再来一局' : 'Play Again'}</Button>
             <Button size="large" onClick={onBack}>{locale === 'zh' ? '返回' : 'Back'}</Button>
           </div>
+          <GameLeaderboard gameId="boss" currentScore={Math.round(totalDamage)} />
         </div>
       )}
 

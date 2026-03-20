@@ -103,6 +103,11 @@ export function getDb(): Database.Database {
       title TEXT NOT NULL,
       content TEXT NOT NULL,
       language TEXT NOT NULL DEFAULT 'en',
+      collection_name TEXT NOT NULL DEFAULT 'My Library',
+      tags TEXT NOT NULL DEFAULT '[]',
+      is_favorite INTEGER NOT NULL DEFAULT 0,
+      use_count INTEGER NOT NULL DEFAULT 0,
+      last_used_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_custom_texts_device ON custom_texts(device_id);
@@ -156,6 +161,19 @@ export function getDb(): Database.Database {
       lesson_id INTEGER PRIMARY KEY,
       practice_count INTEGER NOT NULL DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS game_scores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id TEXT NOT NULL,
+      nickname TEXT NOT NULL DEFAULT '',
+      avatar INTEGER NOT NULL DEFAULT 0,
+      game_id TEXT NOT NULL,
+      score INTEGER NOT NULL,
+      difficulty TEXT NOT NULL DEFAULT 'medium',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_game_scores_game ON game_scores(game_id, score DESC);
+    CREATE INDEX IF NOT EXISTS idx_game_scores_device ON game_scores(device_id);
   `);
 
   // Add new columns to user_profiles if they don't exist (migration)
@@ -171,6 +189,21 @@ export function getDb(): Database.Database {
   };
   for (const [col, sql] of Object.entries(migrations)) {
     if (!columnNames.has(col)) {
+      db.exec(sql);
+    }
+  }
+
+  const customTextColumns = db.prepare("PRAGMA table_info(custom_texts)").all() as { name: string }[];
+  const customTextColumnNames = new Set(customTextColumns.map(c => c.name));
+  const customTextMigrations: Record<string, string> = {
+    collection_name: "ALTER TABLE custom_texts ADD COLUMN collection_name TEXT NOT NULL DEFAULT 'My Library'",
+    tags: "ALTER TABLE custom_texts ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'",
+    is_favorite: "ALTER TABLE custom_texts ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0",
+    use_count: "ALTER TABLE custom_texts ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0",
+    last_used_at: "ALTER TABLE custom_texts ADD COLUMN last_used_at DATETIME",
+  };
+  for (const [col, sql] of Object.entries(customTextMigrations)) {
+    if (!customTextColumnNames.has(col)) {
       db.exec(sql);
     }
   }

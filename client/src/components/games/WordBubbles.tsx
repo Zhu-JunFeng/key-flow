@@ -3,6 +3,8 @@ import { Button } from '@arco-design/web-react';
 import { getRandomWord } from '../../lib/gameWords';
 import { useLocale } from '../../lib/hooks';
 import { playKeySound, playCompleteSound } from '../../lib/sounds';
+import { submitGameScore } from '../../lib/api';
+import GameLeaderboard from './GameLeaderboard';
 
 interface Bubble {
   readonly id: number;
@@ -27,6 +29,7 @@ export default function WordBubbles({ onBack }: Props) {
   const [timeLeft, setTimeLeft] = useState(60);
   const [popped, setPopped] = useState(0);
   const [missed, setMissed] = useState(0);
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
 
   const bubblesRef = useRef<Bubble[]>([]);
   const nextIdRef = useRef(0);
@@ -60,7 +63,8 @@ export default function WordBubbles({ onBack }: Props) {
     const xp = Math.round(scoreRef.current / 2);
     const currentXp = parseInt(localStorage.getItem('typerace_xp') || '0');
     localStorage.setItem('typerace_xp', String(currentXp + xp));
-  }, []);
+    submitGameScore({ gameId: 'bubbles', score: scoreRef.current, difficulty }).catch(() => {});
+  }, [difficulty]);
 
   // Timer
   useEffect(() => {
@@ -105,7 +109,7 @@ export default function WordBubbles({ onBack }: Props) {
         const hue = Math.floor(Math.random() * 360);
         bubblesRef.current = [...bubblesRef.current, {
           id: nextIdRef.current++,
-          word: getRandomWord('medium'),
+          word: getRandomWord(difficulty),
           x: 40 + Math.random() * (w - 80),
           y: h + 30,
           size: 35 + Math.random() * 15,
@@ -160,7 +164,7 @@ export default function WordBubbles({ onBack }: Props) {
 
     animRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animRef.current);
-  }, [gameState]);
+  }, [gameState, difficulty]);
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.trim().toLowerCase();
@@ -192,6 +196,19 @@ export default function WordBubbles({ onBack }: Props) {
           <p style={{ color: 'var(--text-secondary)' }}>
             {locale === 'zh' ? '气泡飘起来了！60秒内尽可能多地输入单词消除气泡！' : 'Bubbles are floating up! Pop as many as you can in 60 seconds!'}
           </p>
+          <div className="flex justify-center gap-2">
+            {(['easy', 'medium', 'hard'] as const).map(d => (
+              <button key={d} onClick={() => setDifficulty(d)}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                style={{
+                  background: difficulty === d ? 'rgba(99,102,241,0.15)' : 'var(--bg-card)',
+                  color: difficulty === d ? 'var(--primary-color)' : 'var(--text-secondary)',
+                  border: `1px solid ${difficulty === d ? 'var(--primary-color)' : 'var(--glass-border)'}`,
+                }}>
+                {d === 'easy' ? (locale === 'zh' ? '简单' : 'Easy') : d === 'medium' ? (locale === 'zh' ? '中等' : 'Medium') : (locale === 'zh' ? '困难' : 'Hard')}
+              </button>
+            ))}
+          </div>
           <Button type="primary" size="large" onClick={startGame}>
             {locale === 'zh' ? '开始游戏' : 'Start Game'}
           </Button>
@@ -249,6 +266,7 @@ export default function WordBubbles({ onBack }: Props) {
             <Button type="primary" size="large" onClick={startGame}>{locale === 'zh' ? '再来一局' : 'Play Again'}</Button>
             <Button size="large" onClick={onBack}>{locale === 'zh' ? '返回' : 'Back'}</Button>
           </div>
+          <GameLeaderboard gameId="bubbles" currentScore={score} />
         </div>
       )}
     </div>

@@ -4,6 +4,8 @@ import { getRandomWord } from '../../lib/gameWords';
 import { useLocale } from '../../lib/hooks';
 import { calculateXp } from '../../lib/i18n';
 import { playKeySound, playErrorSound, playCompleteSound } from '../../lib/sounds';
+import { submitGameScore } from '../../lib/api';
+import GameLeaderboard from './GameLeaderboard';
 
 interface FallingWord {
   readonly id: number;
@@ -66,7 +68,8 @@ export default function FallingWords({ onBack }: Props) {
     const xp = calculateXp(0, 100, wordsTypedRef.current * 5, 0) + scoreRef.current;
     const currentXp = parseInt(localStorage.getItem('typerace_xp') || '0');
     localStorage.setItem('typerace_xp', String(currentXp + xp));
-  }, []);
+    submitGameScore({ gameId: 'falling', score: scoreRef.current, difficulty }).catch(() => {});
+  }, [difficulty]);
 
   // Game loop
   useEffect(() => {
@@ -208,6 +211,8 @@ export default function FallingWords({ onBack }: Props) {
     }
   };
 
+  const currentLevel = 1 + Math.floor(wordsTyped / 5);
+
   return (
     <div>
       {gameState === 'idle' && (
@@ -249,7 +254,7 @@ export default function FallingWords({ onBack }: Props) {
             <div className="flex items-center gap-4 text-sm">
               <span style={{ color: 'var(--text-secondary)' }}>{locale === 'zh' ? '分数' : 'Score'}: <strong style={{ color: 'var(--primary-color)' }}>{score}</strong></span>
               <span style={{ color: 'var(--text-secondary)' }}>{locale === 'zh' ? '单词' : 'Words'}: <strong style={{ color: '#10b981' }}>{wordsTyped}</strong></span>
-              <span style={{ color: 'var(--text-secondary)' }}>Lv.<strong>{levelRef.current}</strong></span>
+              <span style={{ color: 'var(--text-secondary)' }}>Lv.<strong>{currentLevel}</strong></span>
             </div>
             <div className="flex items-center gap-1">
               {Array.from({ length: 3 }, (_, i) => (
@@ -305,6 +310,7 @@ export default function FallingWords({ onBack }: Props) {
             <Button type="primary" size="large" onClick={startGame}>{locale === 'zh' ? '再来一局' : 'Play Again'}</Button>
             <Button size="large" onClick={onBack}>{locale === 'zh' ? '返回' : 'Back'}</Button>
           </div>
+          <GameLeaderboard gameId="falling" currentScore={score} />
         </div>
       )}
     </div>

@@ -3,6 +3,8 @@ import { Button } from '@arco-design/web-react';
 import { getRandomWords } from '../../lib/gameWords';
 import { useLocale } from '../../lib/hooks';
 import { playKeySound, playErrorSound, playCompleteSound } from '../../lib/sounds';
+import { submitGameScore } from '../../lib/api';
+import GameLeaderboard from './GameLeaderboard';
 
 interface Props {
   readonly onBack: () => void;
@@ -18,6 +20,8 @@ export default function SpeedRace({ onBack }: Props) {
   const [currentWord, setCurrentWord] = useState('');
   const [typedChars, setTypedChars] = useState(0);
   const [wpm, setWpm] = useState(0);
+  const [upcomingWords, setUpcomingWords] = useState<readonly string[]>([]);
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
 
   const wordQueueRef = useRef<string[]>([]);
   const startTimeRef = useRef(0);
@@ -28,12 +32,13 @@ export default function SpeedRace({ onBack }: Props) {
 
   const nextWord = useCallback(() => {
     if (wordQueueRef.current.length < 5) {
-      wordQueueRef.current = [...wordQueueRef.current, ...getRandomWords(20, 'medium')];
+      wordQueueRef.current = [...wordQueueRef.current, ...getRandomWords(20, difficulty)];
     }
     const word = wordQueueRef.current.shift()!;
     setCurrentWord(word);
     setTypedChars(0);
-  }, []);
+    setUpcomingWords(wordQueueRef.current.slice(0, 3));
+  }, [difficulty]);
 
   const startGame = useCallback(() => {
     setGameState('playing');
@@ -44,9 +49,10 @@ export default function SpeedRace({ onBack }: Props) {
     setErrors(0); errorsRef.current = 0;
     setWpm(0);
     startTimeRef.current = Date.now();
-    wordQueueRef.current = [...getRandomWords(20, 'medium')];
+    wordQueueRef.current = [...getRandomWords(20, difficulty)];
+    setUpcomingWords(wordQueueRef.current.slice(0, 3));
     nextWord();
-  }, [nextWord]);
+  }, [difficulty, nextWord]);
 
   const endGame = useCallback(() => {
     setGameState('over');
@@ -59,7 +65,8 @@ export default function SpeedRace({ onBack }: Props) {
     const xp = finalWpm + wordsRef.current * 2;
     const currentXp = parseInt(localStorage.getItem('typerace_xp') || '0');
     localStorage.setItem('typerace_xp', String(currentXp + xp));
-  }, []);
+    submitGameScore({ gameId: 'speed', score: finalWpm, difficulty }).catch(() => {});
+  }, [difficulty]);
 
   // Timer
   useEffect(() => {
@@ -126,6 +133,19 @@ export default function SpeedRace({ onBack }: Props) {
           <p style={{ color: 'var(--text-secondary)' }}>
             {locale === 'zh' ? '60秒限时！尽可能快地打出单词，看看你的WPM能到多少！' : '60 seconds! Type as fast as you can and see your WPM!'}
           </p>
+          <div className="flex justify-center gap-2">
+            {(['easy', 'medium', 'hard'] as const).map(d => (
+              <button key={d} onClick={() => setDifficulty(d)}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                style={{
+                  background: difficulty === d ? 'rgba(99,102,241,0.15)' : 'var(--bg-card)',
+                  color: difficulty === d ? 'var(--primary-color)' : 'var(--text-secondary)',
+                  border: `1px solid ${difficulty === d ? 'var(--primary-color)' : 'var(--glass-border)'}`,
+                }}>
+                {d === 'easy' ? (locale === 'zh' ? '简单' : 'Easy') : d === 'medium' ? (locale === 'zh' ? '中等' : 'Medium') : (locale === 'zh' ? '困难' : 'Hard')}
+              </button>
+            ))}
+          </div>
           <Button type="primary" size="large" onClick={startGame}>
             {locale === 'zh' ? '开始竞赛' : 'Start Race'}
           </Button>
@@ -163,7 +183,7 @@ export default function SpeedRace({ onBack }: Props) {
             onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
             {/* Upcoming words preview */}
             <div className="flex justify-center gap-3 mb-6 text-sm" style={{ color: 'var(--text-muted)' }}>
-              {wordQueueRef.current.slice(0, 3).map((w, i) => (
+              {upcomingWords.map((w, i) => (
                 <span key={i} className="px-3 py-1 rounded-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--glass-border)' }}>{w}</span>
               ))}
             </div>
@@ -205,6 +225,7 @@ export default function SpeedRace({ onBack }: Props) {
             <Button type="primary" size="large" onClick={startGame}>{locale === 'zh' ? '再来一局' : 'Play Again'}</Button>
             <Button size="large" onClick={onBack}>{locale === 'zh' ? '返回' : 'Back'}</Button>
           </div>
+          <GameLeaderboard gameId="speed" currentScore={wpm} />
         </div>
       )}
     </div>

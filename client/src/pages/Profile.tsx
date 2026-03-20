@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuthUser, logout } from '../lib/auth';
 import { useLocale } from '../lib/hooks';
 import { getDeviceId } from '../lib/device';
 import { getLevelInfo } from '../lib/i18n';
 import { t } from '../lib/i18n';
+import { fetchGrowthOverview } from '../lib/api';
 
 export default function Profile() {
   const locale = useLocale();
@@ -11,10 +13,34 @@ export default function Profile() {
   const user = getAuthUser();
   const deviceId = getDeviceId();
   const isGuest = user.loginType === 'guest';
+  const [growth, setGrowth] = useState<{
+    streakDays: number;
+    totalSessions: number;
+    totalChars: number;
+    totalReplays: number;
+    rewardLevel: number;
+    unlockedRewards: readonly {
+      id: string;
+      name: string;
+      unlocked: boolean;
+    }[];
+    missions: readonly {
+      id: string;
+      title: string;
+      progress: number;
+      target: number;
+      reward: string;
+      completed: boolean;
+    }[];
+  } | null>(null);
 
   const totalXp = parseInt(localStorage.getItem('typerace_xp') || '0');
   const totalTyped = parseInt(localStorage.getItem('typerace_total_typed') || '0');
   const levelInfo = getLevelInfo(totalXp);
+
+  useEffect(() => {
+    fetchGrowthOverview().then(setGrowth).catch(() => setGrowth(null));
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -121,6 +147,81 @@ export default function Profile() {
           )}
         </div>
       </div>
+
+      {growth && (
+        <div className="glass-card p-6 mb-6" style={{ cursor: 'default' }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                {locale === 'zh' ? '成长中心' : 'Growth Center'}
+              </h3>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                {locale === 'zh'
+                  ? `奖励等级 Lv.${growth.rewardLevel} · 连续 ${growth.streakDays} 天`
+                  : `Reward level ${growth.rewardLevel} · ${growth.streakDays} day streak`}
+              </p>
+            </div>
+            <div className="flex gap-2 text-xs">
+              <span className="px-2.5 py-1 rounded-full" style={{ background: 'rgba(99,102,241,0.12)', color: 'var(--primary-color)' }}>
+                {growth.totalSessions} {locale === 'zh' ? '次训练' : 'sessions'}
+              </span>
+              <span className="px-2.5 py-1 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>
+                {growth.totalReplays} {locale === 'zh' ? '条回放' : 'replays'}
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-3 mb-5">
+            {growth.missions.map(mission => (
+              <div key={mission.id} className="rounded-2xl p-3.5" style={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--glass-border)',
+              }}>
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{mission.title}</span>
+                  <span className="text-[11px]" style={{ color: mission.completed ? '#10b981' : 'var(--text-muted)' }}>
+                    {mission.progress}/{mission.target}
+                  </span>
+                </div>
+                <div className="h-2 rounded-full overflow-hidden mb-2" style={{ background: 'rgba(148,163,184,0.24)' }}>
+                  <div className="h-full rounded-full" style={{
+                    width: `${Math.min(100, (mission.progress / mission.target) * 100)}%`,
+                    background: mission.completed ? 'linear-gradient(135deg, #10b981, #34d399)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                  }} />
+                </div>
+                <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  {locale === 'zh' ? '奖励' : 'Reward'}: {mission.reward}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>
+              {locale === 'zh' ? '可解锁奖励' : 'Unlocks'}
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {growth.unlockedRewards.map(reward => (
+                <div key={reward.id} className="rounded-2xl p-3.5" style={{
+                  background: reward.unlocked ? 'rgba(16,185,129,0.1)' : 'var(--bg-card)',
+                  border: reward.unlocked ? '1px solid rgba(16,185,129,0.18)' : '1px solid var(--glass-border)',
+                }}>
+                  <div className="text-sm font-semibold" style={{ color: reward.unlocked ? '#10b981' : 'var(--text-primary)' }}>
+                    {reward.name}
+                  </div>
+                  <div className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                    {reward.unlocked
+                      ? (locale === 'zh' ? '已解锁' : 'Unlocked')
+                      : (locale === 'zh' ? '继续完成任务解锁' : 'Keep progressing to unlock')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="space-y-3">

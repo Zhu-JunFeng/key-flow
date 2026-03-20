@@ -6,20 +6,10 @@ import Stats from '../components/Stats';
 import { useTyping } from '../hooks/useTyping';
 import { resumeAudioContext } from '../lib/sounds';
 import { submitScore } from '../lib/device';
+import { getStoredAvatar, getStoredNickname } from '../lib/userPrefs';
+import { useLocale } from '../lib/hooks';
 
 type TestDuration = 30 | 60 | 120 | 300;
-const DURATION_OPTIONS = [
-  { label: '30秒', value: 30 },
-  { label: '1分钟', value: 60 },
-  { label: '2分钟', value: 120 },
-  { label: '5分钟', value: 300 },
-];
-
-const LANGUAGE_OPTIONS = [
-  { label: '🇬🇧 English', value: 'en' },
-  { label: '🇨🇳 中文拼音', value: 'zh' },
-];
-
 const TEST_TEXTS = {
   en: [
     "The ability to type quickly and accurately is an essential skill in the modern digital world. Whether you are writing emails, coding software, chatting with friends, or taking notes in class, your typing speed directly impacts your productivity. Studies have shown that the average person types at about 40 words per minute, while professional typists can reach speeds of 80 to 100 words per minute or more. The key to improving your typing speed is consistent practice and proper technique. Start by learning the correct finger placement on the home row keys. Your left hand fingers should rest on A, S, D, and F, while your right hand fingers rest on J, K, L, and semicolon. From this position, each finger is responsible for reaching specific keys above and below. Avoid looking at the keyboard as you type. Instead, keep your eyes on the screen and trust your muscle memory. Over time, your fingers will learn to find the right keys automatically. Remember, accuracy is more important than speed when you are learning. It is better to type slowly and correctly than to rush and make mistakes. Speed will naturally increase as your accuracy improves.",
@@ -32,6 +22,7 @@ const TEST_TEXTS = {
 };
 
 export default function TypingTest() {
+  const locale = useLocale();
   const [duration, setDuration] = useState<TestDuration>(60);
   const [language, setLanguage] = useState<'en' | 'zh'>(() => (localStorage.getItem('typingLanguage') as 'en' | 'zh') || 'en');
   const [phase, setPhase] = useState<'setup' | 'typing' | 'result'>('setup');
@@ -42,32 +33,77 @@ export default function TypingTest() {
   const showKeyboard = localStorage.getItem('showKeyboard') !== 'false';
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
+  const resultSubmittedRef = useRef(false);
+  const metricsRef = useRef({ wpm: 0, accuracy: 100, currentIndex: 0 });
+  const durationOptions = [
+    { label: locale === 'zh' ? '30秒' : '30s', value: 30 },
+    { label: locale === 'zh' ? '1分钟' : '1 min', value: 60 },
+    { label: locale === 'zh' ? '2分钟' : '2 min', value: 120 },
+    { label: locale === 'zh' ? '5分钟' : '5 min', value: 300 },
+  ];
+  const languageOptions = [
+    { label: '🇬🇧 English', value: 'en' },
+    { label: locale === 'zh' ? '🇨🇳 中文拼音' : '🇨🇳 Chinese Pinyin', value: 'zh' },
+  ];
 
-  const onProgress = useCallback(() => {}, []);
+  const finishTest = useCallback((result: { wpm: number; accuracy: number; currentIndex: number }) => {
+    if (resultSubmittedRef.current) return;
+    resultSubmittedRef.current = true;
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    if (result.wpm > 0) {
+      submitScore({
+        nickname: getStoredNickname('Anonymous'),
+        avatar: getStoredAvatar(),
+        wpm: result.wpm,
+        accuracy: result.accuracy,
+        textLength: result.currentIndex,
+        mode: 'test',
+        language,
+      });
+    }
+
+    setPhase('result');
+  }, [language]);
+
+  const onProgress = useCallback((nextState: { isComplete: boolean; wpm: number; accuracy: number; currentIndex: number }) => {
+    if (nextState.isComplete) {
+      finishTest(nextState);
+    }
+  }, [finishTest]);
+
   const { state, handleKeyDown, reset } = useTyping(text, onProgress);
 
   useEffect(() => {
+    metricsRef.current = {
+      wpm: state.wpm,
+      accuracy: state.accuracy,
+      currentIndex: state.currentIndex,
+    };
+  }, [state.wpm, state.accuracy, state.currentIndex]);
+
+  useEffect(() => {
     if (phase === 'typing' && state.startTime && !timerRef.current) {
-      startTimeRef.current = Date.now(); setTimeLeft(duration);
+      startTimeRef.current = state.startTime;
       timerRef.current = setInterval(() => {
         const remaining = duration - Math.floor((Date.now() - startTimeRef.current) / 1000);
         setTimeLeft(Math.max(0, remaining));
-        if (remaining <= 0) setPhase('result');
+        if (remaining <= 0) {
+          finishTest(metricsRef.current);
+        }
       }, 200);
     }
-    return () => { if (timerRef.current && phase !== 'typing') { clearInterval(timerRef.current); timerRef.current = null; } };
-  }, [phase, state.startTime, duration]);
-
-  useEffect(() => {
-    if (phase === 'result' && timerRef.current) {
-      clearInterval(timerRef.current); timerRef.current = null;
-      const nickname = localStorage.getItem('nickname') || 'Anonymous';
-      const avatar = parseInt(localStorage.getItem('avatar') || '0');
-      if (state.wpm > 0) submitScore({ nickname, avatar, wpm: state.wpm, accuracy: state.accuracy, textLength: state.currentIndex, mode: 'test', language });
-    }
-  }, [phase, state.wpm, state.accuracy, state.currentIndex, language]);
-
-  useEffect(() => { if (state.isComplete && phase === 'typing') setPhase('result'); }, [state.isComplete, phase]);
+    return () => {
+      if (timerRef.current && phase !== 'typing') {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [phase, state.startTime, duration, finishTest]);
 
   useEffect(() => {
     if (phase !== 'typing') return;
@@ -76,8 +112,24 @@ export default function TypingTest() {
     return () => window.removeEventListener('keydown', handler);
   }, [phase, handleKeyDown, text, state.currentIndex]);
 
-  const startTest = () => { const pool = TEST_TEXTS[language]; setText(pool[Math.floor(Math.random() * pool.length)]); reset(); setPhase('typing'); setTimeLeft(duration); };
-  const retry = () => { reset(); setPhase('setup'); setTimeLeft(0); };
+  const startTest = () => {
+    const pool = TEST_TEXTS[language];
+    resultSubmittedRef.current = false;
+    setText(pool[Math.floor(Math.random() * pool.length)]);
+    reset();
+    setPhase('typing');
+    setTimeLeft(duration);
+  };
+  const retry = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    resultSubmittedRef.current = false;
+    reset();
+    setPhase('setup');
+    setTimeLeft(0);
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -86,28 +138,28 @@ export default function TypingTest() {
           <div className="text-center">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium mb-4"
               style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)', color: '#f97316' }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />限时挑战
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />{locale === 'zh' ? '限时挑战' : 'Timed Challenge'}
             </div>
             <h1 className="text-3xl font-extrabold mb-2" style={{
               background: 'linear-gradient(135deg, #1e293b 0%, #6366f1 100%)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-            }}>计时测试</h1>
-            <p className="text-slate-700">在限定时间内尽可能快速准确地打字</p>
+            }}>{locale === 'zh' ? '计时测试' : 'Typing Test'}</h1>
+            <p className="text-slate-700">{locale === 'zh' ? '在限定时间内尽可能快速准确地打字' : 'Type as quickly and accurately as possible within the time limit'}</p>
           </div>
           <div className="glass-card p-6 space-y-6" style={{ cursor: 'default' }}
             onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
             onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
             <div>
-              <label className="block text-xs text-slate-600 uppercase tracking-wider font-semibold mb-3">选择时长</label>
-              <Radio.Group type="button" value={duration} onChange={v => setDuration(v as TestDuration)} options={DURATION_OPTIONS}
+              <label className="block text-xs text-slate-600 uppercase tracking-wider font-semibold mb-3">{locale === 'zh' ? '选择时长' : 'Choose Duration'}</label>
+              <Radio.Group type="button" value={duration} onChange={v => setDuration(v as TestDuration)} options={durationOptions}
                 style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }} />
             </div>
             <div>
-              <label className="block text-xs text-slate-600 uppercase tracking-wider font-semibold mb-3">语言</label>
-              <Select value={language} onChange={v => setLanguage(v as 'en' | 'zh')} options={LANGUAGE_OPTIONS} size="large" style={{ width: '100%' }} />
+              <label className="block text-xs text-slate-600 uppercase tracking-wider font-semibold mb-3">{locale === 'zh' ? '语言' : 'Language'}</label>
+              <Select value={language} onChange={v => setLanguage(v as 'en' | 'zh')} options={languageOptions} size="large" style={{ width: '100%' }} />
             </div>
             <Button type="primary" long size="large" onClick={startTest} style={{ height: '48px', fontSize: '16px', fontWeight: 700 }}>
-              开始测试
+              {locale === 'zh' ? '开始测试' : 'Start Test'}
             </Button>
           </div>
         </div>
@@ -119,7 +171,7 @@ export default function TypingTest() {
             onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
             onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-slate-600 uppercase tracking-wider font-semibold">剩余时间</span>
+              <span className="text-xs text-slate-600 uppercase tracking-wider font-semibold">{locale === 'zh' ? '剩余时间' : 'Time Left'}</span>
               <span className={`text-3xl font-extrabold font-mono tabular-nums ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : timeLeft <= 30 ? 'text-orange-500' : 'text-slate-800'}`}>{Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}</span>
             </div>
             <div className="h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.7)' }}>
@@ -139,21 +191,21 @@ export default function TypingTest() {
             onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
             onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
             <div className="text-5xl">{state.wpm >= 80 ? '🏆' : state.wpm >= 50 ? '🎉' : state.wpm >= 30 ? '👍' : '💪'}</div>
-            <h2 className="text-2xl font-extrabold text-slate-800">测试完成！</h2>
+            <h2 className="text-2xl font-extrabold text-slate-800">{locale === 'zh' ? '测试完成！' : 'Test Complete!'}</h2>
             <div className="grid grid-cols-2 gap-3">
-              <ResultBox label="打字速度" value={`${state.wpm}`} unit="WPM" color="var(--primary-color)" />
-              <ResultBox label="准确率" value={`${state.accuracy}`} unit="%" color="#10b981" />
-              <ResultBox label="输入字符" value={`${state.currentIndex}`} unit="个" color="#f59e0b" />
-              <ResultBox label="测试时长" value={`${duration}`} unit="秒" color="#8b5cf6" />
+              <ResultBox label={locale === 'zh' ? '打字速度' : 'Speed'} value={`${state.wpm}`} unit="WPM" color="var(--primary-color)" />
+              <ResultBox label={locale === 'zh' ? '准确率' : 'Accuracy'} value={`${state.accuracy}`} unit="%" color="#10b981" />
+              <ResultBox label={locale === 'zh' ? '输入字符' : 'Typed Chars'} value={`${state.currentIndex}`} unit={locale === 'zh' ? '个' : ''} color="#f59e0b" />
+              <ResultBox label={locale === 'zh' ? '测试时长' : 'Duration'} value={`${duration}`} unit={locale === 'zh' ? '秒' : 's'} color="#8b5cf6" />
             </div>
             <div className="text-sm font-semibold px-5 py-2 rounded-full inline-block" style={{
               background: state.wpm >= 80 ? 'rgba(245,158,11,0.1)' : state.wpm >= 60 ? 'rgba(16,185,129,0.1)' : 'rgba(99,102,241,0.1)',
               color: state.wpm >= 80 ? '#f59e0b' : state.wpm >= 60 ? '#10b981' : 'var(--primary-color)',
               border: `1px solid ${state.wpm >= 80 ? 'rgba(245,158,11,0.3)' : state.wpm >= 60 ? 'rgba(16,185,129,0.3)' : 'rgba(99,102,241,0.3)'}`,
-            }}>{state.wpm >= 80 ? '专业水平' : state.wpm >= 60 ? '优秀' : state.wpm >= 40 ? '良好' : state.wpm >= 20 ? '继续加油' : '初学者'}</div>
+            }}>{state.wpm >= 80 ? (locale === 'zh' ? '专业水平' : 'Pro Level') : state.wpm >= 60 ? (locale === 'zh' ? '优秀' : 'Excellent') : state.wpm >= 40 ? (locale === 'zh' ? '良好' : 'Good') : state.wpm >= 20 ? (locale === 'zh' ? '继续加油' : 'Keep Going') : (locale === 'zh' ? '初学者' : 'Beginner')}</div>
             <div className="flex justify-center gap-3 pt-2">
-              <Button onClick={retry}>返回</Button>
-              <Button type="primary" onClick={startTest}>再测一次</Button>
+              <Button onClick={retry}>{locale === 'zh' ? '返回' : 'Back'}</Button>
+              <Button type="primary" onClick={startTest}>{locale === 'zh' ? '再测一次' : 'Try Again'}</Button>
             </div>
           </div>
         </div>

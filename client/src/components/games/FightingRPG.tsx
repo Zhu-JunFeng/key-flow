@@ -3,6 +3,8 @@ import { Button } from '@arco-design/web-react';
 import { getRandomWords } from '../../lib/gameWords';
 import { useLocale } from '../../lib/hooks';
 import { playKeySound, playErrorSound, playCompleteSound } from '../../lib/sounds';
+import { submitGameScore } from '../../lib/api';
+import GameLeaderboard from './GameLeaderboard';
 
 interface Props {
   readonly onBack: () => void;
@@ -15,6 +17,14 @@ interface Fighter {
   hp: number;
   readonly maxHp: number;
 }
+
+const ENEMIES: readonly Fighter[] = [
+  { name: 'Goblin', nameZh: '哥布林', emoji: '👺', hp: 80, maxHp: 80 },
+  { name: 'Knight', nameZh: '骑士', emoji: '🗡️', hp: 120, maxHp: 120 },
+  { name: 'Mage', nameZh: '法师', emoji: '🧙', hp: 100, maxHp: 100 },
+  { name: 'Dragon', nameZh: '飞龙', emoji: '🐲', hp: 150, maxHp: 150 },
+  { name: 'Demon King', nameZh: '魔王', emoji: '👿', hp: 200, maxHp: 200 },
+];
 
 export default function FightingRPG({ onBack }: Props) {
   const locale = useLocale();
@@ -32,20 +42,13 @@ export default function FightingRPG({ onBack }: Props) {
   const [roundPhase, setRoundPhase] = useState<'typing' | 'result'>('typing');
   const [lastAction, setLastAction] = useState('');
   const [combo, setCombo] = useState(0);
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
 
   const inputRef = useRef<HTMLInputElement>(null);
   const startTimeRef = useRef(0);
 
-  const ENEMIES: readonly Fighter[] = [
-    { name: 'Goblin', nameZh: '哥布林', emoji: '👺', hp: 80, maxHp: 80 },
-    { name: 'Knight', nameZh: '骑士', emoji: '🗡️', hp: 120, maxHp: 120 },
-    { name: 'Mage', nameZh: '法师', emoji: '🧙', hp: 100, maxHp: 100 },
-    { name: 'Dragon', nameZh: '飞龙', emoji: '🐲', hp: 150, maxHp: 150 },
-    { name: 'Demon King', nameZh: '魔王', emoji: '👿', hp: 200, maxHp: 200 },
-  ];
-
   const startGame = useCallback(() => {
-    const newWords = getRandomWords(100, 'medium');
+    const newWords = getRandomWords(100, difficulty);
     setWords(newWords);
     setCurrentWordIdx(0);
     setInput('');
@@ -62,24 +65,20 @@ export default function FightingRPG({ onBack }: Props) {
     startTimeRef.current = Date.now();
     setGameState('playing');
     setTimeout(() => inputRef.current?.focus(), 100);
+  }, [difficulty]);
+
+  const startNextRound = useCallback(() => {
+    setRound(prev => prev + 1);
+    setTimeLeft(8);
+    setCorrectChars(0);
+    setTotalChars(0);
+    setWordsThisRound(0);
+    setRoundPhase('typing');
+    startTimeRef.current = Date.now();
+    setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
   // Round timer
-  useEffect(() => {
-    if (gameState !== 'playing' || roundPhase !== 'typing') return;
-    const interval = setInterval(() => {
-      const elapsed = (Date.now() - startTimeRef.current) / 1000;
-      const remaining = Math.max(0, 8 - elapsed);
-      setTimeLeft(Math.round(remaining * 10) / 10);
-
-      if (remaining <= 0) {
-        // Round ends - calculate damage
-        resolveRound();
-      }
-    }, 100);
-    return () => clearInterval(interval);
-  }, [gameState, roundPhase]);
-
   const resolveRound = useCallback(() => {
     setRoundPhase('result');
     const accuracy = totalChars > 0 ? correctChars / totalChars : 0;
@@ -114,6 +113,10 @@ export default function FightingRPG({ onBack }: Props) {
           setTimeout(() => {
             setGameState('win');
             playCompleteSound();
+            const xp = round * 5 + combo * 2;
+            const currentXp = parseInt(localStorage.getItem('typerace_xp') || '0');
+            localStorage.setItem('typerace_xp', String(currentXp + xp));
+            submitGameScore({ gameId: 'fighting', score: round * 10, difficulty }).catch(() => {});
           }, 1500);
         } else {
           // Heal player a bit, next enemy
@@ -141,18 +144,22 @@ export default function FightingRPG({ onBack }: Props) {
     setTimeout(() => {
       if (gameState === 'playing') startNextRound();
     }, 2000);
-  }, [totalChars, correctChars, wordsThisRound, round, locale, gameState]);
+  }, [totalChars, correctChars, wordsThisRound, round, locale, gameState, combo, difficulty, startNextRound]);
 
-  const startNextRound = () => {
-    setRound(prev => prev + 1);
-    setTimeLeft(8);
-    setCorrectChars(0);
-    setTotalChars(0);
-    setWordsThisRound(0);
-    setRoundPhase('typing');
-    startTimeRef.current = Date.now();
-    setTimeout(() => inputRef.current?.focus(), 100);
-  };
+  // Round timer
+  useEffect(() => {
+    if (gameState !== 'playing' || roundPhase !== 'typing') return;
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - startTimeRef.current) / 1000;
+      const remaining = Math.max(0, 8 - elapsed);
+      setTimeLeft(Math.round(remaining * 10) / 10);
+
+      if (remaining <= 0) {
+        resolveRound();
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, [gameState, roundPhase, resolveRound]);
 
   const handleInput = (value: string) => {
     if (gameState !== 'playing' || roundPhase !== 'typing') return;
@@ -171,7 +178,7 @@ export default function FightingRPG({ onBack }: Props) {
 
       const nextIdx = currentWordIdx + 1;
       if (nextIdx >= words.length) {
-        const moreWords = getRandomWords(100, 'medium');
+        const moreWords = getRandomWords(100, difficulty);
         setWords(prev => [...prev, ...moreWords]);
       }
       setCurrentWordIdx(nextIdx);
@@ -202,6 +209,19 @@ export default function FightingRPG({ onBack }: Props) {
               ? '每回合8秒打字时间，WPM决定攻击力，准确率决定暴击率！击败5个对手赢得胜利！'
               : '8 seconds per round. WPM = Attack Power, Accuracy = Crit Chance! Defeat 5 opponents to win!'}
           </p>
+          <div className="flex justify-center gap-2">
+            {(['easy', 'medium', 'hard'] as const).map(d => (
+              <button key={d} onClick={() => setDifficulty(d)}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                style={{
+                  background: difficulty === d ? 'rgba(99,102,241,0.15)' : 'var(--bg-card)',
+                  color: difficulty === d ? 'var(--primary-color)' : 'var(--text-secondary)',
+                  border: `1px solid ${difficulty === d ? 'var(--primary-color)' : 'var(--glass-border)'}`,
+                }}>
+                {d === 'easy' ? (locale === 'zh' ? '简单' : 'Easy') : d === 'medium' ? (locale === 'zh' ? '中等' : 'Medium') : (locale === 'zh' ? '困难' : 'Hard')}
+              </button>
+            ))}
+          </div>
           <Button type="primary" size="large" onClick={startGame}>
             {locale === 'zh' ? '开始战斗' : 'Start Fight'}
           </Button>
@@ -337,6 +357,7 @@ export default function FightingRPG({ onBack }: Props) {
             <Button type="primary" size="large" onClick={startGame}>{locale === 'zh' ? '再来一局' : 'Play Again'}</Button>
             <Button size="large" onClick={onBack}>{locale === 'zh' ? '返回' : 'Back'}</Button>
           </div>
+          <GameLeaderboard gameId="fighting" currentScore={round * 10} />
         </div>
       )}
 
@@ -355,6 +376,7 @@ export default function FightingRPG({ onBack }: Props) {
             <Button type="primary" size="large" onClick={startGame}>{locale === 'zh' ? '再来一局' : 'Play Again'}</Button>
             <Button size="large" onClick={onBack}>{locale === 'zh' ? '返回' : 'Back'}</Button>
           </div>
+          <GameLeaderboard gameId="fighting" currentScore={round * 10} />
         </div>
       )}
     </div>

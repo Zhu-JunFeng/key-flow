@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button, Spin } from '@arco-design/web-react';
-import { fetchMyReplays, fetchReplay } from '../lib/api';
+import { fetchMyReplays, fetchReplay, fetchReplayAnalysis } from '../lib/api';
 import { ReplayPlayer, type ReplayEvent } from '../lib/replay';
 import { t } from '../lib/i18n';
 import { useLocale } from '../lib/hooks';
@@ -84,10 +84,27 @@ function ReplayViewer({ replayId }: { readonly replayId: number }) {
   const [errors, setErrors] = useState<ReadonlySet<number>>(new Set());
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const [analysis, setAnalysis] = useState<{
+    totalErrors: number;
+    correctionBursts: number;
+    longestPerfectStreak: number;
+    averageIntervalMs: number;
+    consistencyScore: number;
+    hardestSnippet: string;
+    mistakeHotspots: readonly { char: string; errors: number }[];
+    benchmark: {
+      replayId: number;
+      wpm: number;
+      accuracy: number;
+      deltaWpm: number;
+      deltaAccuracy: number;
+    } | null;
+  } | null>(null);
   const playerRef = useRef<ReplayPlayer | null>(null);
 
   useEffect(() => {
     fetchReplay(replayId).then(r => { setReplay(r); setLoading(false); }).catch(() => setLoading(false));
+    fetchReplayAnalysis(replayId).then(setAnalysis).catch(() => setAnalysis(null));
   }, [replayId]);
 
   const play = useCallback(() => {
@@ -147,6 +164,15 @@ function ReplayViewer({ replayId }: { readonly replayId: number }) {
         </Link>
       </div>
 
+      {analysis && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <ReplayMetric label={locale === 'zh' ? '稳定度' : 'Consistency'} value={String(analysis.consistencyScore)} color="#8b5cf6" />
+          <ReplayMetric label={locale === 'zh' ? '错误数' : 'Errors'} value={String(analysis.totalErrors)} color="#ef4444" />
+          <ReplayMetric label={locale === 'zh' ? '修正波次' : 'Correction Bursts'} value={String(analysis.correctionBursts)} color="#f97316" />
+          <ReplayMetric label={locale === 'zh' ? '最长完美段' : 'Best Streak'} value={String(analysis.longestPerfectStreak)} color="#10b981" />
+        </div>
+      )}
+
       {/* Controls */}
       <div className="glass-card p-4 mb-6 flex items-center gap-4" style={{ cursor: 'default' }}
         onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
@@ -173,6 +199,87 @@ function ReplayViewer({ replayId }: { readonly replayId: number }) {
         </div>
       </div>
 
+      {analysis && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="glass-card p-5" style={{ cursor: 'default' }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
+            <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
+              {locale === 'zh' ? '错误热点' : 'Mistake Hotspots'}
+            </h2>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {analysis.mistakeHotspots.length > 0 ? analysis.mistakeHotspots.map(item => (
+                <span key={item.char} className="px-2.5 py-1 rounded-full text-xs font-semibold" style={{
+                  background: 'rgba(239,68,68,0.12)',
+                  border: '1px solid rgba(239,68,68,0.2)',
+                  color: '#ef4444',
+                }}>
+                  {item.char === ' ' ? 'space' : item.char} × {item.errors}
+                </span>
+              )) : (
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {locale === 'zh' ? '没有明显错误热点' : 'No significant hotspots'}
+                </span>
+              )}
+            </div>
+            <div className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+              {locale === 'zh' ? '最难片段' : 'Hardest snippet'}
+            </div>
+            <div className="mt-2 rounded-2xl px-4 py-3 font-mono text-sm whitespace-pre-wrap break-all" style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--glass-border)',
+              color: 'var(--text-primary)',
+            }}>
+              {analysis.hardestSnippet || (locale === 'zh' ? '暂无' : 'N/A')}
+            </div>
+          </div>
+
+          <div className="glass-card p-5" style={{ cursor: 'default' }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
+            <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
+              {locale === 'zh' ? '复盘解读' : 'Review Notes'}
+            </h2>
+            <div className="space-y-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              <div>
+                {locale === 'zh' ? '平均按键间隔' : 'Average key interval'}:
+                <strong style={{ color: 'var(--primary-color)' }}> {analysis.averageIntervalMs}ms</strong>
+              </div>
+              <div>
+                {locale === 'zh'
+                  ? `这局中你出现了 ${analysis.correctionBursts} 次明显修正波次，适合回看失误前后的节奏。`
+                  : `You had ${analysis.correctionBursts} clear correction bursts. Review the rhythm right before them.`}
+              </div>
+              {analysis.benchmark ? (
+                <div className="rounded-2xl p-3.5" style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--glass-border)',
+                }}>
+                  <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+                    {locale === 'zh' ? '对比个人最佳回放' : 'Compared with your best replay'}
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <span style={{ color: analysis.benchmark.deltaWpm >= 0 ? '#10b981' : '#ef4444' }}>
+                      WPM {analysis.benchmark.deltaWpm >= 0 ? '+' : ''}{analysis.benchmark.deltaWpm}
+                    </span>
+                    <span style={{ color: analysis.benchmark.deltaAccuracy >= 0 ? '#10b981' : '#ef4444' }}>
+                      ACC {analysis.benchmark.deltaAccuracy >= 0 ? '+' : ''}{analysis.benchmark.deltaAccuracy}%
+                    </span>
+                    <Link to={`/replay/${analysis.benchmark.replayId}`} className="text-xs font-semibold" style={{ color: 'var(--primary-color)' }}>
+                      {locale === 'zh' ? '查看基准回放' : 'Open benchmark'}
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {locale === 'zh' ? '再保存一条更强的回放后，这里会出现对比基准。' : 'Save more replays to unlock benchmark comparisons.'}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Text display */}
       <div className="rounded-3xl overflow-hidden" style={{
         background: 'var(--glass-bg)',
@@ -197,6 +304,17 @@ function ReplayViewer({ replayId }: { readonly replayId: number }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ReplayMetric({ label, value, color }: { readonly label: string; readonly value: string; readonly color: string }) {
+  return (
+    <div className="glass-card p-4" style={{ cursor: 'default' }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
+      <div className="text-[11px] font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{label}</div>
+      <div className="text-xl font-bold tabular-nums" style={{ color }}>{value}</div>
     </div>
   );
 }

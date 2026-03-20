@@ -3,6 +3,7 @@
 // Supports: Google, GitHub, Guest login
 
 import { getDeviceId } from './device';
+import { getStoredAvatar, getStoredNickname, setStoredAvatar, setStoredNickname } from './userPrefs';
 
 export interface AuthUser {
   readonly id: string;
@@ -28,18 +29,16 @@ export function getAuthUser(): AuthUser {
   const deviceId = getDeviceId();
   return {
     id: deviceId,
-    nickname: localStorage.getItem('typerace_nickname') || `Player_${deviceId.slice(0, 6)}`,
-    avatar: parseInt(localStorage.getItem('typerace_avatar') || '0'),
+    nickname: getStoredNickname(`Player_${deviceId.slice(0, 6)}`),
+    avatar: getStoredAvatar(),
     loginType: 'guest',
   };
 }
 
 export function setAuthUser(user: AuthUser): void {
   localStorage.setItem(AUTH_KEY, JSON.stringify(user));
-  localStorage.setItem('typerace_nickname', user.nickname);
-  if (user.avatar !== undefined) {
-    localStorage.setItem('typerace_avatar', String(user.avatar));
-  }
+  setStoredNickname(user.nickname);
+  setStoredAvatar(user.avatar ?? 0);
   window.dispatchEvent(new Event('auth-change'));
 }
 
@@ -127,8 +126,8 @@ export function guestLogin(): AuthUser {
   const deviceId = getDeviceId();
   const user: AuthUser = {
     id: deviceId,
-    nickname: localStorage.getItem('typerace_nickname') || `Player_${deviceId.slice(0, 6)}`,
-    avatar: parseInt(localStorage.getItem('typerace_avatar') || '0'),
+    nickname: getStoredNickname(`Player_${deviceId.slice(0, 6)}`),
+    avatar: getStoredAvatar(),
     loginType: 'guest',
   };
   setAuthUser(user);

@@ -1,4 +1,5 @@
 import { getDeviceId } from './device';
+import { getStoredAvatar, getStoredNickname } from './userPrefs';
 
 const API_BASE = '';
 
@@ -29,6 +30,47 @@ export function fetchKeyErrorStats() {
   );
 }
 
+export interface TrainingRecommendations {
+  readonly priority: 'accuracy' | 'speed' | 'stamina' | 'competition';
+  readonly suggestedDifficulty: 'easy' | 'medium' | 'hard';
+  readonly recommendedMode: 'practice' | 'lessons' | 'code' | 'multiplayer' | 'daily';
+  readonly focusKeys: readonly string[];
+  readonly targetWpm: number;
+  readonly targetAccuracy: number;
+  readonly targetSessions: number;
+  readonly drills: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly description: string;
+    readonly path: string;
+  }[];
+}
+
+export interface DashboardInsights {
+  readonly consistencyScore: number;
+  readonly weeklySessions: number;
+  readonly weeklyChars: number;
+  readonly weeklyMinutes: number;
+  readonly wpmTrend: number;
+  readonly accuracyTrend: number;
+  readonly bestHour: { readonly hour: number; readonly avgWpm: number } | null;
+  readonly modeBreakdown: readonly {
+    readonly mode: string;
+    readonly sessions: number;
+    readonly avgWpm: number;
+    readonly avgAccuracy: number;
+  }[];
+  readonly coach: TrainingRecommendations;
+}
+
+export function fetchDashboardInsights() {
+  return request<DashboardInsights>(`/api/stats/${deviceId()}/insights`);
+}
+
+export function fetchTrainingRecommendations() {
+  return request<TrainingRecommendations>(`/api/training/${deviceId()}/recommendations`);
+}
+
 export function reportSession(data: {
   chars: number;
   wpm: number;
@@ -43,16 +85,56 @@ export function reportSession(data: {
 }
 
 // ===== Custom Texts =====
+export interface CustomTextEntry {
+  readonly id: number;
+  readonly title: string;
+  readonly content: string;
+  readonly language: string;
+  readonly collectionName: string;
+  readonly tags: readonly string[];
+  readonly isFavorite: boolean;
+  readonly useCount: number;
+  readonly lastUsedAt: string | null;
+  readonly createdAt: string;
+}
+
 export function fetchCustomTexts() {
-  return request<readonly { id: number; title: string; content: string; language: string; createdAt: string }[]>(
+  return request<readonly CustomTextEntry[]>(
     `/api/custom-texts/${deviceId()}`
   );
 }
 
-export function createCustomText(data: { title: string; content: string; language?: string }) {
+export function createCustomText(data: {
+  title: string;
+  content: string;
+  language?: string;
+  collectionName?: string;
+  tags?: readonly string[];
+  isFavorite?: boolean;
+}) {
   return request<{ id: number }>(`/api/custom-texts/${deviceId()}`, {
     method: 'POST',
     body: JSON.stringify(data),
+  });
+}
+
+export function updateCustomText(textId: number, data: {
+  title?: string;
+  content?: string;
+  language?: string;
+  collectionName?: string;
+  tags?: readonly string[];
+  isFavorite?: boolean;
+}) {
+  return request<{ success: boolean }>(`/api/custom-texts/${deviceId()}/${textId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export function markCustomTextUsed(textId: number) {
+  return request<{ success: boolean }>(`/api/custom-texts/${deviceId()}/${textId}/use`, {
+    method: 'POST',
   });
 }
 
@@ -70,8 +152,8 @@ export function submitDailyChallengeScore(data: { wpm: number; accuracy: number;
     method: 'POST',
     body: JSON.stringify({
       deviceId: deviceId(),
-      nickname: localStorage.getItem('nickname') ?? 'Anonymous',
-      avatar: parseInt(localStorage.getItem('avatar') ?? '0'),
+      nickname: getStoredNickname('Anonymous'),
+      avatar: getStoredAvatar(),
       ...data,
     }),
   });
@@ -139,6 +221,25 @@ export function fetchReplay(replayId: number) {
   }>(`/api/replays/view/${replayId}`);
 }
 
+export function fetchReplayAnalysis(replayId: number) {
+  return request<{
+    totalErrors: number;
+    correctionBursts: number;
+    longestPerfectStreak: number;
+    averageIntervalMs: number;
+    consistencyScore: number;
+    hardestSnippet: string;
+    mistakeHotspots: readonly { char: string; errors: number }[];
+    benchmark: {
+      replayId: number;
+      wpm: number;
+      accuracy: number;
+      deltaWpm: number;
+      deltaAccuracy: number;
+    } | null;
+  }>(`/api/replays/view/${replayId}/analysis`);
+}
+
 export function saveReplay(data: {
   textContent: string;
   replayData: readonly { timestamp: number; key: string; correct: boolean }[];
@@ -150,7 +251,7 @@ export function saveReplay(data: {
     method: 'POST',
     body: JSON.stringify({
       deviceId: deviceId(),
-      nickname: localStorage.getItem('nickname') ?? 'Anonymous',
+      nickname: getStoredNickname('Anonymous'),
       ...data,
     }),
   });
@@ -162,4 +263,116 @@ export function fetchCodeTexts(language?: string) {
   return request<readonly { id: string; text: string; language: string; title: string; difficulty: string }[]>(
     `/api/texts/code${q}`
   );
+}
+
+// ===== Game Scores =====
+export function submitGameScore(data: { gameId: string; score: number; difficulty: string }) {
+  return request<{ id: number }>('/api/game-scores', {
+    method: 'POST',
+    body: JSON.stringify({
+      deviceId: deviceId(),
+      nickname: getStoredNickname('Anonymous'),
+      avatar: getStoredAvatar(),
+      ...data,
+    }),
+  });
+}
+
+export interface GameScoreEntry {
+  readonly nickname: string;
+  readonly avatar: number;
+  readonly score: number;
+  readonly difficulty: string;
+  readonly deviceId: string;
+  readonly createdAt: string;
+}
+
+export function fetchGameLeaderboard(gameId: string) {
+  return request<readonly GameScoreEntry[]>(`/api/game-scores/${gameId}`);
+}
+
+export function fetchSeasonOverview() {
+  return request<{
+    player: {
+      rank: number | null;
+      rating: number;
+      tier: string;
+      matches: number;
+      wins: number;
+      podiums: number;
+      avgWpm: number;
+      avgAccuracy: number;
+      winRate: number;
+    };
+    leaderboard: readonly {
+      rank: number;
+      deviceId: string;
+      nickname: string;
+      avatar: number;
+      rating: number;
+      wins: number;
+      avgWpm: number;
+      tier: string;
+    }[];
+    recentOpponents: readonly {
+      deviceId: string;
+      nickname: string;
+      avatar: number;
+      races: number;
+      lastSeen: string;
+    }[];
+    friendLadder: readonly {
+      deviceId: string;
+      nickname: string;
+      avatar: number;
+      rating: number;
+      tier: string;
+    }[];
+  }>(`/api/season/${deviceId()}`);
+}
+
+export function fetchGrowthOverview() {
+  return request<{
+    streakDays: number;
+    totalSessions: number;
+    totalChars: number;
+    totalReplays: number;
+    rewardLevel: number;
+    unlockedRewards: readonly {
+      id: string;
+      name: string;
+      unlocked: boolean;
+    }[];
+    missions: readonly {
+      id: string;
+      title: string;
+      progress: number;
+      target: number;
+      reward: string;
+      completed: boolean;
+    }[];
+  }>(`/api/growth/${deviceId()}`);
+}
+
+export function fetchGameMeta() {
+  return request<{
+    level: number;
+    totalRuns: number;
+    uniqueGames: number;
+    passportProgress: number;
+    topGames: readonly {
+      gameId: string;
+      plays: number;
+      bestScore: number;
+      avgScore: number;
+      lastPlayed: string;
+    }[];
+    missions: readonly {
+      id: string;
+      title: string;
+      progress: number;
+      target: number;
+      completed: boolean;
+    }[];
+  }>(`/api/games/meta/${deviceId()}`);
 }

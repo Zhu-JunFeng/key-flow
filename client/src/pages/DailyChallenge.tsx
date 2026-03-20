@@ -3,14 +3,18 @@ import { Button, Spin, Message } from '@arco-design/web-react';
 import TypingArea from '../components/TypingArea';
 import VirtualKeyboard from '../components/VirtualKeyboard';
 import Stats from '../components/Stats';
+import { useElapsedTime } from '../hooks/useElapsedTime';
 import { useTyping } from '../hooks/useTyping';
 import { resumeAudioContext } from '../lib/sounds';
 import { fetchDailyChallenge, submitDailyChallengeScore, fetchDailyChallengeLeaderboard } from '../lib/api';
 import { reportSession } from '../lib/api';
 import { getDeviceId } from '../lib/device';
 import { getAvatar } from '../lib/avatars';
+import { t } from '../lib/i18n';
+import { useLocale } from '../lib/hooks';
 
 export default function DailyChallenge() {
+  const locale = useLocale();
   const [challenge, setChallenge] = useState<{ date: string; textContent: string } | null>(null);
   const [leaderboard, setLeaderboard] = useState<readonly { deviceId: string; nickname: string; avatar: number; wpm: number; accuracy: number; timeMs: number }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,12 +40,12 @@ export default function DailyChallenge() {
       submitDailyChallengeScore({ wpm: s.wpm, accuracy: s.accuracy, timeMs })
         .then(() => {
           setSubmitted(true);
-          Message.success('成绩已提交！');
+          Message.success(locale === 'zh' ? '成绩已提交！' : 'Score submitted!');
           fetchDailyChallengeLeaderboard().then(setLeaderboard);
         });
       reportSession({ chars: challenge.textContent.length, wpm: s.wpm, accuracy: s.accuracy, timeMs });
     }
-  }, [challenge, submitted]);
+  }, [challenge, locale, submitted]);
 
   const { state, handleKeyDown } = useTyping(challenge?.textContent ?? '', onProgress);
 
@@ -63,7 +67,7 @@ export default function DailyChallenge() {
     return () => window.removeEventListener('keydown', handler);
   }, [handleKeyDown, challenge, state.currentIndex]);
 
-  const timeElapsed = state.startTime ? (state.endTime ?? Date.now()) - state.startTime : undefined;
+  const timeElapsed = useElapsedTime(state.startTime, state.endTime);
   const myDeviceId = getDeviceId();
   const myRank = leaderboard.findIndex(e => e.deviceId === myDeviceId) + 1;
 
@@ -78,8 +82,10 @@ export default function DailyChallenge() {
           <h1 className="text-2xl font-extrabold" style={{
             background: 'linear-gradient(135deg, var(--text-primary) 0%, var(--primary-color) 100%)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-          }}>每日挑战</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{challenge.date} - 每天一篇，全球同题</p>
+          }}>{t('daily.title', locale)}</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+            {challenge.date} - {locale === 'zh' ? '每天一篇，全球同题' : 'One shared text for everyone today'}
+          </p>
         </div>
         {myRank > 0 && (
           <div className="text-sm px-3 py-1.5 rounded-full" style={{
@@ -87,7 +93,7 @@ export default function DailyChallenge() {
             color: 'var(--primary-color)',
             border: '1px solid rgba(99,102,241,0.2)',
           }}>
-            你的排名: #{myRank} / {leaderboard.length}
+            {locale === 'zh' ? '你的排名' : 'Your rank'}: #{myRank} / {leaderboard.length}
           </div>
         )}
       </div>
@@ -100,10 +106,10 @@ export default function DailyChallenge() {
           <div className="glass-card p-6 text-center" style={{ cursor: 'default' }}
             onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
             onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
-            <h2 className="text-2xl font-extrabold text-emerald-500 mb-3">挑战完成！</h2>
+            <h2 className="text-2xl font-extrabold text-emerald-500 mb-3">{locale === 'zh' ? '挑战完成！' : 'Challenge Complete!'}</h2>
             <div className="flex justify-center gap-8 text-lg">
-              <span style={{ color: 'var(--text-secondary)' }}>速度: <strong style={{ color: 'var(--primary-color)' }}>{state.wpm} WPM</strong></span>
-              <span style={{ color: 'var(--text-secondary)' }}>准确率: <strong className="text-emerald-500">{state.accuracy}%</strong></span>
+              <span style={{ color: 'var(--text-secondary)' }}>{locale === 'zh' ? '速度' : 'Speed'}: <strong style={{ color: 'var(--primary-color)' }}>{state.wpm} WPM</strong></span>
+              <span style={{ color: 'var(--text-secondary)' }}>{locale === 'zh' ? '准确率' : 'Accuracy'}: <strong className="text-emerald-500">{state.accuracy}%</strong></span>
             </div>
             {!submitted && (
               <Button type="primary" className="mt-4" onClick={() => {
@@ -112,7 +118,7 @@ export default function DailyChallenge() {
                   setSubmitted(true);
                   fetchDailyChallengeLeaderboard().then(setLeaderboard);
                 });
-              }}>提交成绩</Button>
+              }}>{locale === 'zh' ? '提交成绩' : 'Submit Score'}</Button>
             )}
           </div>
 
@@ -120,9 +126,9 @@ export default function DailyChallenge() {
           <div className="glass-card p-6" style={{ cursor: 'default' }}
             onMouseEnter={e => { e.currentTarget.style.transform = 'none'; }}
             onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}>
-            <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>今日排行榜</h3>
+            <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>{locale === 'zh' ? '今日排行榜' : "Today's Leaderboard"}</h3>
             {leaderboard.length === 0 ? (
-              <p className="text-center py-4 text-sm" style={{ color: 'var(--text-muted)' }}>暂无数据</p>
+              <p className="text-center py-4 text-sm" style={{ color: 'var(--text-muted)' }}>{locale === 'zh' ? '暂无数据' : 'No entries yet'}</p>
             ) : (
               <div className="space-y-2">
                 {leaderboard.map((entry, i) => (
@@ -139,7 +145,7 @@ export default function DailyChallenge() {
                       <span className="text-xl">{getAvatar(entry.avatar)}</span>
                       <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{entry.nickname}</span>
                       {entry.deviceId === myDeviceId && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: 'var(--primary-color)', background: 'rgba(99,102,241,0.1)' }}>(你)</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ color: 'var(--primary-color)', background: 'rgba(99,102,241,0.1)' }}>{locale === 'zh' ? '(你)' : '(You)'}</span>
                       )}
                     </div>
                     <div className="flex gap-4 text-sm tabular-nums">
@@ -159,7 +165,7 @@ export default function DailyChallenge() {
               background: 'var(--glass-bg)', backdropFilter: 'blur(10px)', border: '1px solid var(--glass-border)',
             }}>
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-              {state.startTime ? '继续打字...' : '点击任意键开始挑战'}
+              {state.startTime ? t('practice.continueTyping', locale) : (locale === 'zh' ? '点击任意键开始挑战' : 'Press any key to start the challenge')}
             </span>
           </div>
           {showKeyboard && <VirtualKeyboard activeKey={challenge.textContent[state.currentIndex]} pressedKey={lastPressedKey} isError={lastWasError} showFingers />}
