@@ -77,6 +77,38 @@ export default function Home() {
             </div>
           ))}
         </div>
+
+        <section
+          className="mt-14 max-w-4xl rounded-3xl p-6 md:p-8"
+          style={{
+            background: 'var(--glass-bg)',
+            backdropFilter: 'blur(18px)',
+            WebkitBackdropFilter: 'blur(18px)',
+            border: '1px solid var(--glass-border)',
+            boxShadow: 'var(--glass-shadow)',
+          }}
+        >
+          <h2 className="text-2xl font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
+            {locale === 'zh' ? '在线打字练习、打字速度测试与多人竞速平台' : 'Online typing practice, typing test, and multiplayer racing'}
+          </h2>
+          <div className="space-y-3 text-sm md:text-base leading-7" style={{ color: 'var(--text-secondary)' }}>
+            <p>
+              {locale === 'zh'
+                ? 'KeyFlow 是一个专注于在线打字练习的网站，支持中文打字、英文打字、打字速度测试、课程训练、每日挑战和多人实时竞速。'
+                : 'KeyFlow is an online typing practice site with typing tests, lessons, daily challenges, and multiplayer races.'}
+            </p>
+            <p>
+              {locale === 'zh'
+                ? '如果你正在找打字练习网站、WPM 速度测试工具、打字课程或打字游戏，这里提供从新手到进阶用户都能使用的练习模式。'
+                : 'It helps beginners and advanced typists improve speed, accuracy, and consistency through structured practice.'}
+            </p>
+            <p>
+              {locale === 'zh'
+                ? '你可以在首页进入打字课程、自由练习、打字游戏、排行榜和多人竞速模式，持续提升打字速度与准确率。'
+                : 'You can access lessons, free practice, games, leaderboards, and multiplayer modes from the home page.'}
+            </p>
+          </div>
+        </section>
       </div>
     </div>
   );

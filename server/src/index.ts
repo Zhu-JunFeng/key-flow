@@ -34,6 +34,8 @@ const normalizeOrigin = (value: string) => value.replace(/\/+$/, '');
 const renderExternalUrl = process.env.RENDER_EXTERNAL_URL?.trim();
 const renderOrigin = renderExternalUrl ? normalizeOrigin(renderExternalUrl) : '';
 const defaultProductionOrigins = [
+  'http://keyflow.zcn.world',
+  'https://keyflow.zcn.world',
   'http://182.92.160.46',
   'https://182.92.160.46',
   'http://182-92-160-46.nip.io',

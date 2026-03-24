@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="http://182.92.160.46">在线体验</a> ·
+  <a href="https://keyflow.zcn.world">在线体验</a> ·
   <a href="#功能特性">功能特性</a> ·
   <a href="#截图展示">截图展示</a> ·
   <a href="#本地开发">本地开发</a> ·
@@ -253,7 +253,8 @@ pm2 restart typing-race             # 重启
 ```env
 PORT=3001
 NODE_ENV=production
-OAUTH_REDIRECT_BASE=http://your-domain.com
+APP_ORIGIN=https://keyflow.zcn.world
+OAUTH_REDIRECT_BASE=https://keyflow.zcn.world
 GOOGLE_CLIENT_ID=xxx
 GOOGLE_CLIENT_SECRET=xxx
 ```

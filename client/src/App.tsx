@@ -32,6 +32,82 @@ const pageVariants = {
   exit: { opacity: 0, y: -10, transition: { duration: 0.2, ease: 'easeIn' as const } },
 };
 
+const seoByPath: Record<string, { title: string; description: string; canonical: string }> = {
+  '/': {
+    title: 'KeyFlow - 在线打字练习与打字速度测试',
+    description: 'KeyFlow 提供在线打字练习、打字速度测试、中文英文打字训练、多人打字竞速、排行榜和打字游戏。',
+    canonical: 'https://keyflow.zcn.world/',
+  },
+  '/lessons': {
+    title: '打字课程 - KeyFlow',
+    description: '从零开始的在线打字课程，循序渐进练习指法、准确率和打字速度。',
+    canonical: 'https://keyflow.zcn.world/lessons',
+  },
+  '/practice': {
+    title: '打字练习 - KeyFlow',
+    description: '支持中文和英文的在线打字练习，适合日常提速、盲打训练和准确率提升。',
+    canonical: 'https://keyflow.zcn.world/practice',
+  },
+  '/test': {
+    title: '打字速度测试 - KeyFlow',
+    description: '在线测试你的 WPM、准确率和稳定性，快速了解当前打字水平。',
+    canonical: 'https://keyflow.zcn.world/test',
+  },
+  '/games': {
+    title: '打字游戏 - KeyFlow',
+    description: '通过赛车、塔防、BOSS 战等多种打字游戏提升速度和反应能力。',
+    canonical: 'https://keyflow.zcn.world/games',
+  },
+  '/multiplayer': {
+    title: '多人打字竞速 - KeyFlow',
+    description: '与其他玩家实时在线打字竞速，体验多人对战和排行榜竞争。',
+    canonical: 'https://keyflow.zcn.world/multiplayer',
+  },
+  '/leaderboard': {
+    title: '打字排行榜 - KeyFlow',
+    description: '查看打字速度排行榜、每日挑战排名和各模式成绩表现。',
+    canonical: 'https://keyflow.zcn.world/leaderboard',
+  },
+  '/daily': {
+    title: '每日打字挑战 - KeyFlow',
+    description: '参与每日打字挑战，和全站用户在同一篇内容上比拼速度与准确率。',
+    canonical: 'https://keyflow.zcn.world/daily',
+  },
+};
+
+function applyMetaTag(name: string, content: string) {
+  let tag = document.querySelector(`meta[name="${name}"]`);
+  if (!tag) {
+    tag = document.createElement('meta');
+    tag.setAttribute('name', name);
+    document.head.appendChild(tag);
+  }
+  tag.setAttribute('content', content);
+}
+
+function applyCanonical(href: string) {
+  let tag = document.querySelector('link[rel="canonical"]');
+  if (!tag) {
+    tag = document.createElement('link');
+    tag.setAttribute('rel', 'canonical');
+    document.head.appendChild(tag);
+  }
+  tag.setAttribute('href', href);
+}
+
+function RouteSeo() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const seo = seoByPath[location.pathname] ?? seoByPath['/'];
+    document.title = seo.title;
+    applyMetaTag('description', seo.description);
+    applyCanonical(seo.canonical);
+  }, [location.pathname]);
+
+  return null;
+}
+
 function AnimatedRoutes() {
   const location = useLocation();
   return (
@@ -122,6 +198,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <RouteSeo />
       <div className="min-h-screen relative">
         {/* Background wallpaper - HD display */}
         <div

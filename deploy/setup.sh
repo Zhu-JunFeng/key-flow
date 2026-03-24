@@ -81,7 +81,7 @@ fi
 echo ""
 echo "=========================================="
 echo "  部署完成！"
-echo "  访问地址: http://182.92.160.46"
+echo "  访问地址: keyflow.zcn.world (HTTPS 证书配置后使用 https://)"
 echo "  应用目录: $APP_DIR"
 echo "  数据库:   $APP_DIR/data/typing-race.db"
 echo "  备份目录: $APP_DIR/backups/"
