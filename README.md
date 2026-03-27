@@ -253,10 +253,10 @@ pm2 restart typing-race             # 重启
 ```env
 PORT=3001
 NODE_ENV=production
-APP_ORIGIN=https://keyflow.zcn.world
-OAUTH_REDIRECT_BASE=https://keyflow.zcn.world
-GOOGLE_CLIENT_ID=xxx
-GOOGLE_CLIENT_SECRET=xxx
+APP_ORIGIN=
+OAUTH_REDIRECT_BASE=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 ```
 
 ---
